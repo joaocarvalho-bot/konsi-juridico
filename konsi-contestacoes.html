@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Konsi Jurídico — Contestações</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --verde:#0A9F82;--verde-escuro:#04513F;--verde-mais-escuro:#03261F;
+  --verde-suave:#E8F5F2;--verde-borda:#0DC7A2;
+  --texto:#141514;--texto-sec:#6B7280;
+  --bg:#F8FAFA;--card:#FFFFFF;--borda:#E2EAE8;--borda-forte:#C5D8D4;
+  --radius:12px;--radius-sm:8px;
+  --shadow:0 1px 3px rgba(4,81,63,.08),0 1px 2px rgba(4,81,63,.06);
+  --erro:#C0392B;--alerta:#8a6508;
+}
+body{font-family:'Manrope',sans-serif;background:var(--bg);color:var(--texto);font-size:14px}
+.mono{font-family:'JetBrains Mono',monospace}
+.logo-box{display:flex;align-items:center;justify-content:center;background:var(--verde);border-radius:9px;flex:none}
+.logo-box svg{width:64%;height:64%}
+/* ── login ── */
+#tela-login{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--verde-mais-escuro)}
+.login-card{width:340px;background:var(--card);border-radius:16px;padding:32px 28px}
+.login-card .marca{display:flex;align-items:center;gap:11px;margin-bottom:22px}
+/* ── shell ── */
+#app{display:none;grid-template-columns:240px 1fr;min-height:100vh}
+#app.logado{display:grid}
+.sidebar{background:var(--verde-mais-escuro);padding:20px 12px;display:flex;flex-direction:column;gap:4px}
+.sidebar .marca{display:flex;align-items:center;gap:10px;padding:2px 8px 16px;color:#fff;font-weight:800;font-size:14px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:var(--radius-sm);color:#bcd6cf;font-size:14px;cursor:pointer;border:none;background:none;text-align:left;width:100%;font-family:inherit}
+.nav-item:hover{background:rgba(255,255,255,.06);color:#fff}
+.nav-item.ativo{background:var(--verde);color:#fff;font-weight:600}
+.main{display:flex;flex-direction:column;min-width:0}
+.topbar{position:sticky;top:0;z-index:100;height:60px;background:var(--card);border-bottom:1px solid var(--borda);display:flex;align-items:center;justify-content:space-between;padding:0 24px}
+.topbar .quem{display:flex;align-items:center;gap:10px}
+.avatar{width:34px;height:34px;border-radius:50%;background:var(--verde-suave);color:var(--verde-escuro);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px}
+.conteudo{padding:24px 28px;max-width:1100px;width:100%}
+.page{display:none}
+.page.ativa{display:block}
+h1.titulo{font-size:20px;font-weight:800;color:var(--verde-escuro);margin-bottom:4px}
+.subtitulo{font-size:13px;color:var(--texto-sec);margin-bottom:20px}
+/* ── componentes ── */
+.card{background:var(--card);border:1px solid var(--borda);border-radius:var(--radius);padding:18px 20px;box-shadow:var(--shadow)}
+label.lbl{display:block;font-size:11px;font-weight:700;color:var(--texto-sec);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px}
+.campo{width:100%;border:1px solid var(--borda);border-radius:var(--radius-sm);padding:9px 12px;font-family:inherit;font-size:14px;background:#fff;color:var(--texto)}
+.campo:focus{outline:none;border-color:var(--verde);box-shadow:0 0 0 3px rgba(10,159,130,.12)}
+textarea.campo{min-height:84px;resize:vertical}
+.btn{background:var(--verde);color:#fff;border:none;padding:10px 20px;border-radius:var(--radius-sm);font-family:inherit;font-weight:700;font-size:14px;cursor:pointer;display:inline-flex;align-items:center;gap:8px}
+.btn:hover{background:var(--verde-escuro)}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.btn.fantasma{background:#fff;color:var(--verde-escuro);border:1px solid var(--borda-forte)}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+/* ── stepper ── */
+.stepper{display:flex;gap:8px;margin-bottom:22px;flex-wrap:wrap}
+.step{flex:1;min-width:100px;padding:10px 8px;border-radius:10px;background:#fff;border:1px solid var(--borda);font-size:12px;color:var(--texto-sec);text-align:center}
+.step.ativa{background:var(--verde-suave);border-color:var(--verde-borda);color:var(--verde-escuro);font-weight:700}
+.step.feita{color:var(--verde)}
+.step b{display:block;font-size:15px;margin-bottom:2px}
+.etapa{display:none;border:none}
+.etapa.ativa{display:block}
+/* ── tabela / kpi / barras / pills ── */
+.tabela{width:100%;border-collapse:collapse;font-size:13px}
+.tabela th{text-align:left;color:var(--texto-sec);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px;padding:9px 10px;border-bottom:1px solid var(--borda)}
+.tabela td{padding:10px;border-bottom:1px solid var(--borda)}
+.tabela.clicavel tbody tr:hover{background:var(--verde-suave);cursor:pointer}
+.kpi{background:var(--verde-suave);border-radius:10px;padding:14px 16px}
+.kpi .num{font-size:24px;font-weight:800;color:var(--verde-escuro);font-family:'JetBrains Mono',monospace}
+.kpi .rotulo{font-size:12px;color:var(--texto-sec);margin-top:2px}
+.barra-trilho{background:var(--bg);border-radius:6px;height:10px;overflow:hidden}
+.barra{background:var(--verde);height:100%;border-radius:6px;transition:width .4s}
+.linha-barra{margin-bottom:11px}
+.linha-barra .top{display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px}
+.pill{font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;font-family:'JetBrains Mono',monospace}
+.pill.ok{background:var(--verde-suave);color:var(--verde-escuro)}
+.pill.pend{background:#FBF1DC;color:var(--alerta)}
+.pill.trat{background:#FCECEC;color:var(--erro)}
+.pill.neutro{background:#EEF2F1;color:var(--texto-sec)}
+/* ── toast ── */
+#toast{position:fixed;bottom:24px;right:24px;z-index:999;display:flex;flex-direction:column;gap:8px}
+.toast-item{background:var(--verde-mais-escuro);color:#fff;padding:12px 18px;border-radius:10px;font-size:13px;box-shadow:0 4px 16px rgba(0,0,0,.25)}
+.toast-item.erro{background:var(--erro)}
+.aviso-app{background:var(--verde-suave);border:1px solid var(--verde-borda);border-radius:var(--radius);padding:14px 16px;margin-top:16px}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="konsi-mark" viewBox="0 0 512 512">
+    <path fill-rule="evenodd" clip-rule="evenodd" d="M230.4 105V170.4L142 245V179.4L230.4 105ZM142 268.2V332.6L230.2 408V342.8L142 268.2ZM369.6 105V170.2C369.6 170.2 268.2 252 268.4 255.8C268.6 259.6 369.6 342.6 369.6 342.6V408C369.6 408 225.298 293.733 216.4 277.8C207.502 261.867 207.135 252.933 216.4 237C225.664 221.067 369.6 105 369.6 105Z" fill="#fff"/>
+  </symbol>
+</svg>
+
+<div id="tela-login">
+  <form class="login-card" id="form-login">
+    <div class="marca">
+      <div class="logo-box" style="width:40px;height:40px"><svg><use href="#konsi-mark"/></svg></div>
+      <div><div style="font-weight:800;color:var(--verde-escuro);font-size:16px">Konsi Jurídico</div>
+      <div style="font-size:11px;color:var(--texto-sec)">Gestão de contestações</div></div>
+    </div>
+    <label class="lbl" for="login-email">E-mail</label>
+    <input class="campo" id="login-email" type="email" required style="margin-bottom:14px" autocomplete="username">
+    <label class="lbl" for="login-senha">Senha</label>
+    <input class="campo" id="login-senha" type="password" required style="margin-bottom:20px" autocomplete="current-password">
+    <button class="btn" id="btn-entrar" type="submit" style="width:100%;justify-content:center;height:44px">Entrar</button>
+    <div id="link-esqueci" style="text-align:center;margin-top:14px;font-size:12px;color:var(--verde);cursor:pointer;font-weight:600">Esqueci minha senha</div>
+  </form>
+</div>
+
+<div id="app">
+  <aside class="sidebar">
+    <div class="marca">
+      <div class="logo-box" style="width:30px;height:30px"><svg><use href="#konsi-mark"/></svg></div>
+      Konsi Jurídico
+    </div>
+    <button class="nav-item ativo" id="nav-nova"       onclick="showPage('nova')">＋ Nova contestação</button>
+    <button class="nav-item" id="nav-historico"  onclick="showPage('historico')">≡ Histórico</button>
+    <button class="nav-item" id="nav-dashboard"  onclick="showPage('dashboard')">▤ Dashboard</button>
+    <button class="nav-item" id="nav-relatorios" onclick="showPage('relatorios')">▦ Relatórios</button>
+    <button class="nav-item" id="nav-importacao" onclick="showPage('importacao')">↥ Importar histórico</button>
+    <div style="flex:1"></div>
+    <button class="nav-item" id="btn-sair">⏻ Sair</button>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <div class="mono" id="crumb" style="font-size:12px;color:var(--texto-sec)">nova-contestacao</div>
+      <div class="quem">
+        <div style="text-align:right">
+          <div style="font-size:12px;font-weight:700" id="usuario-nome">—</div>
+          <div style="font-size:10px;color:var(--texto-sec)" id="usuario-cargo">—</div>
+        </div>
+        <div class="avatar" id="usuario-iniciais">–</div>
+      </div>
+    </header>
+    <main class="conteudo">
+      <section class="page ativa" id="page-nova"><h1 class="titulo">Nova contestação</h1><p class="subtitulo">Fluxo em 6 etapas — do recebimento da notificação à finalização.</p><div id="area-etapas"></div></section>
+      <section class="page" id="page-historico"><h1 class="titulo">Histórico</h1><p class="subtitulo">Contestações registradas no sistema. Clique numa linha para retomar.</p><div id="area-historico" class="card">Carregando…</div></section>
+      <section class="page" id="page-dashboard"><h1 class="titulo">Dashboard</h1><p class="subtitulo">Indicadores operacionais + histórico consolidado.</p><div id="area-dashboard">Carregando…</div></section>
+      <section class="page" id="page-relatorios"><h1 class="titulo">Relatórios</h1><p class="subtitulo">Consulta filtrada sobre operacional + histórico.</p><div id="area-relatorios"></div></section>
+      <section class="page" id="page-importacao"><h1 class="titulo">Importar histórico</h1><p class="subtitulo">Planilha antiga (.xlsx) → alimenta cohort e rankings.</p><div id="area-importacao"></div></section>
+    </main>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ════════ 0. CONFIG — preencher após Task 3 ════════ */
+const SUPABASE_URL = 'https://SEU_PROJECT_REF.supabase.co';
+const SUPABASE_ANON_KEY = 'SUA_CHAVE_ANON_AQUI';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+/* ════════ helpers de UI ════════ */
+const $ = (id) => document.getElementById(id);
+const val = (id) => ($(id) ? $(id).value.trim() : '');
+const num = (id) => { const v = val(id).replace(/\./g,'').replace(',','.'); return v ? Number(v) : null; };
+function toast(msg, tipo='ok'){
+  const el = document.createElement('div');
+  el.className = 'toast-item' + (tipo==='erro' ? ' erro' : '');
+  el.textContent = msg;
+  $('toast').appendChild(el);
+  setTimeout(()=>el.remove(), 4200);
+}
+function fmtData(d){ if(!d) return '—'; const [a,m,dia]=String(d).slice(0,10).split('-'); return `${dia}/${m}/${a}`; }
+function iniciais(nome){ return nome.split(' ').filter(Boolean).map(p=>p[0]).slice(0,2).join('').toUpperCase(); }
+
+/* ════════ navegação ════════ */
+const PAGINAS = ['nova','historico','dashboard','relatorios','importacao'];
+function showPage(nome){
+  PAGINAS.forEach(p=>{
+    $('page-'+p).classList.toggle('ativa', p===nome);
+    $('nav-'+p).classList.toggle('ativo', p===nome);
+  });
+  $('crumb').textContent = {nova:'nova-contestacao',historico:'historico',dashboard:'dashboard',relatorios:'relatorios',importacao:'importar-historico'}[nome];
+  if(nome==='historico' && typeof carregarHistorico==='function') carregarHistorico();
+  if(nome==='dashboard' && typeof carregarDashboard==='function') carregarDashboard();
+}
+</script>
+</body>
+</html>
