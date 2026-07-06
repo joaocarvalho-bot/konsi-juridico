@@ -1,0 +1,1288 @@
+# Front-end Konsi Jurídico — Plano de Implementação
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Construir o `konsi-contestacoes.html` (single-file, GitHub Pages) que consome o backend Supabase pronto, substituindo o sistema legado — e colocar o projeto inteiro no ar.
+
+**Architecture:** App single-file vanilla JS (sem build). Camada de dados = funções de `cliente-supabase-exemplo.js` coladas no `<script>` e ligadas a uma UI de 5 páginas (Nova contestação com 6 etapas, Histórico, Dashboard, Relatórios, Importação). Auth via Supabase Auth; laudo via Edge Function `gerar-laudo`; sync Google via Edge Function `sync-drive-sheets`.
+
+**Tech Stack:** HTML/CSS/JS puro · `@supabase/supabase-js@2` (UMD/CDN) · SheetJS `xlsx` (CDN) · Google Fonts (Manrope + JetBrains Mono) · Supabase CLI (deploy das functions) · gh CLI (GitHub Pages).
+
+**Spec:** `docs/specs/2026-07-01-front-end-konsi-juridico-design.md` (visual aprovado: clássico legado + logo real).
+
+**Estratégia de verificação:** projeto single-file sem framework de teste — cada task termina com uma verificação manual roteirizada no browser (passos exatos + resultado esperado), servida por `python -m http.server`. Tasks de integração exigem a Fase 1 concluída (Supabase no ar). Nada de "está pronto" sem rodar a verificação da task.
+
+---
+
+## Estrutura de arquivos (final)
+
+```
+C:\repos\konsi-juridico\
+├── konsi-contestacoes.html        ← ENTREGÁVEL PRINCIPAL (novo)
+├── redefinir-senha.html           ← página de reset de senha (novo)
+├── sql/01..04_*.sql               ← já existem (copiados de Downloads)
+├── supabase/
+│   ├── config.toml                ← criado por `supabase init`
+│   └── functions/
+│       ├── gerar-laudo/index.ts       ← movido de functions/ (+ fix modelo)
+│       └── sync-drive-sheets/index.ts ← movido de functions/ (+ fix bug)
+├── cliente-supabase-exemplo.js    ← referência canônica da camada de dados
+├── docs/
+│   ├── specs/…  · plans/…
+│   └── legado/konsi-contestacoes-legado.html  ← referência visual
+└── README.md
+```
+
+---
+
+## Fase 0 — Repositório
+
+### Task 1: Criar o repo do projeto
+
+**Files:**
+- Create: `C:\repos\konsi-juridico\` (cópia de `C:\Users\joao.borges\Downloads\konsi-backend\`)
+- Create: `C:\repos\konsi-juridico\docs\legado\konsi-contestacoes-legado.html`
+- Create: `C:\repos\konsi-juridico\.gitignore`
+
+- [ ] **Step 1: Copiar o projeto para C:\repos e trazer o HTML legado como referência**
+
+```bash
+mkdir -p /c/repos/konsi-juridico
+cp -r "/c/Users/joao.borges/Downloads/konsi-backend/." /c/repos/konsi-juridico/
+mkdir -p /c/repos/konsi-juridico/docs/legado
+cp "/c/Users/joao.borges/Downloads/konsi-contestacoes (1).html" /c/repos/konsi-juridico/docs/legado/konsi-contestacoes-legado.html
+```
+
+- [ ] **Step 2: Criar `.gitignore`**
+
+```gitignore
+.DS_Store
+Thumbs.db
+node_modules/
+.env
+*.local
+```
+
+- [ ] **Step 3: Iniciar git e commit inicial**
+
+```bash
+cd /c/repos/konsi-juridico
+git init -b main
+git add -A
+git commit -m "chore: importa backend Supabase + docs + HTML legado de referência"
+```
+
+Esperado: commit criado com sql/, functions/, docs/, README.md, cliente-supabase-exemplo.js.
+
+---
+
+## Fase 1 — Correções de backend + provisionamento Supabase
+
+### Task 2: Corrigir os 2 bugs conhecidos do backend
+
+**Files:**
+- Modify: `functions/sync-drive-sheets/index.ts:137`
+- Modify: `functions/gerar-laudo/index.ts:125`
+
+> Nesta task os arquivos ainda estão em `functions/` — só são movidos para `supabase/functions/` na Task 3.
+
+- [ ] **Step 1: Corrigir coluna inexistente `c.observacao` no sync**
+
+Em `functions/sync-drive-sheets/index.ts`, na montagem da linha do Sheets (~linha 137), trocar:
+
+```ts
+      c.nivel_risco, c.lista_restricao, c.observacao_interna,
+```
+
+(o código atual usa `c.observacao`, coluna que não existe em `contestacoes` — a célula sairia sempre vazia/undefined).
+
+- [ ] **Step 2: Atualizar o modelo da IA no gerar-laudo**
+
+Em `functions/gerar-laudo/index.ts` (~linha 125), trocar:
+
+```ts
+        model: 'claude-sonnet-5',
+```
+
+(era `claude-sonnet-4-20250514`, desatualizado).
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add functions/
+git commit -m "fix: coluna observacao_interna no sync-drive-sheets + modelo atual no gerar-laudo"
+```
+
+### Task 3: Provisionar o Supabase (parte manual + parte CLI)
+
+**Files:**
+- Create: `supabase/config.toml` (via CLI)
+- Move: `functions/*` → `supabase/functions/*`
+
+> Itens marcados **[USUÁRIO]** exigem ação humana (browser/credenciais). Os demais são executáveis por agente após o `link`.
+
+- [ ] **Step 1 [USUÁRIO]: Criar o projeto no Supabase**
+
+Seguir README seção "criar o projeto Supabase": novo projeto `konsi-juridico`, região São Paulo. Anotar **Project URL**, **anon key** e **PROJECT_REF**.
+
+- [ ] **Step 2 [USUÁRIO]: Aplicar os SQLs no SQL Editor, NESTA ORDEM**
+
+`sql/01_schema.sql` → `sql/02_views.sql` → `sql/03_rls_policies.sql` → `sql/04_funcao_importacao.sql`. Cada um deve terminar com "Success".
+
+- [ ] **Step 3 [USUÁRIO]: Criar os 3 usuários no Auth**
+
+Authentication → Users → Add user (Auto Confirm ✅), com User Metadata conforme README:
+rafaelseixas@ / wilquerbosque@ / julianabacelar@konsi.com.br — `{"nome_completo":"…","cargo":"…"}`. O trigger cria `usuarios_perfil` automaticamente.
+
+- [ ] **Step 4: Preparar layout da CLI e mover as functions**
+
+A CLI espera `supabase/functions/<nome>/index.ts`:
+
+```bash
+cd /c/repos/konsi-juridico
+npx supabase init          # cria supabase/config.toml (responder N para IDE settings)
+mkdir -p supabase/functions
+git mv functions/gerar-laudo supabase/functions/gerar-laudo
+git mv functions/sync-drive-sheets supabase/functions/sync-drive-sheets
+rmdir functions
+```
+
+- [ ] **Step 5 [USUÁRIO]: Login e link da CLI**
+
+```bash
+npx supabase login
+npx supabase link --project-ref SEU_PROJECT_REF
+```
+
+- [ ] **Step 6 [USUÁRIO]: Configurar secrets**
+
+```bash
+npx supabase secrets set ANTHROPIC_API_KEY=sk-ant-...      # ⚠️ chave COM créditos (a do CP119 está esgotada)
+npx supabase secrets set GOOGLE_SERVICE_ACCOUNT_JSON='{"type":"service_account",...}'
+npx supabase secrets set GOOGLE_SHEET_ID=...
+npx supabase secrets set GOOGLE_DRIVE_FOLDER_ID=...
+```
+
+Pré-requisito Google: Service Account com APIs Drive+Sheets habilitadas; pasta e planilha compartilhadas com o e-mail `...iam.gserviceaccount.com` (edição). Se o Google ainda não estiver pronto, seguir sem os 3 secrets do Google — só o sync fica indisponível.
+
+- [ ] **Step 7: Deploy das Edge Functions**
+
+```bash
+npx supabase functions deploy gerar-laudo
+npx supabase functions deploy sync-drive-sheets
+```
+
+Esperado: ambas listadas em `npx supabase functions list`.
+
+- [ ] **Step 8: Smoke test da gerar-laudo (sem contestação → 400)**
+
+```bash
+curl -s -X POST https://SEU_PROJECT_REF.supabase.co/functions/v1/gerar-laudo \
+  -H "Authorization: Bearer ANON_KEY" -H "Content-Type: application/json" -d '{}'
+```
+
+Esperado: `{"erro":"contestacaoId é obrigatório"}`.
+
+- [ ] **Step 9: Commit**
+
+```bash
+git add -A
+git commit -m "chore: layout supabase-cli (supabase/functions) + config.toml"
+```
+
+---
+
+## Fase 2 — Esqueleto do HTML
+
+### Task 4: `konsi-contestacoes.html` — head, CSS, login, shell, navegação
+
+**Files:**
+- Create: `konsi-contestacoes.html`
+
+- [ ] **Step 1: Criar o arquivo com o conteúdo COMPLETO abaixo**
+
+```html
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Konsi Jurídico — Contestações</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --verde:#0A9F82;--verde-escuro:#04513F;--verde-mais-escuro:#03261F;
+  --verde-suave:#E8F5F2;--verde-borda:#0DC7A2;
+  --texto:#141514;--texto-sec:#6B7280;
+  --bg:#F8FAFA;--card:#FFFFFF;--borda:#E2EAE8;--borda-forte:#C5D8D4;
+  --radius:12px;--radius-sm:8px;
+  --shadow:0 1px 3px rgba(4,81,63,.08),0 1px 2px rgba(4,81,63,.06);
+  --erro:#C0392B;--alerta:#8a6508;
+}
+body{font-family:'Manrope',sans-serif;background:var(--bg);color:var(--texto);font-size:14px}
+.mono{font-family:'JetBrains Mono',monospace}
+.logo-box{display:flex;align-items:center;justify-content:center;background:var(--verde);border-radius:9px;flex:none}
+.logo-box svg{width:64%;height:64%}
+/* ── login ── */
+#tela-login{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--verde-mais-escuro)}
+.login-card{width:340px;background:var(--card);border-radius:16px;padding:32px 28px}
+.login-card .marca{display:flex;align-items:center;gap:11px;margin-bottom:22px}
+/* ── shell ── */
+#app{display:none;grid-template-columns:240px 1fr;min-height:100vh}
+#app.logado{display:grid}
+.sidebar{background:var(--verde-mais-escuro);padding:20px 12px;display:flex;flex-direction:column;gap:4px}
+.sidebar .marca{display:flex;align-items:center;gap:10px;padding:2px 8px 16px;color:#fff;font-weight:800;font-size:14px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:var(--radius-sm);color:#bcd6cf;font-size:14px;cursor:pointer;border:none;background:none;text-align:left;width:100%;font-family:inherit}
+.nav-item:hover{background:rgba(255,255,255,.06);color:#fff}
+.nav-item.ativo{background:var(--verde);color:#fff;font-weight:600}
+.main{display:flex;flex-direction:column;min-width:0}
+.topbar{position:sticky;top:0;z-index:100;height:60px;background:var(--card);border-bottom:1px solid var(--borda);display:flex;align-items:center;justify-content:space-between;padding:0 24px}
+.topbar .quem{display:flex;align-items:center;gap:10px}
+.avatar{width:34px;height:34px;border-radius:50%;background:var(--verde-suave);color:var(--verde-escuro);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px}
+.conteudo{padding:24px 28px;max-width:1100px;width:100%}
+.page{display:none}
+.page.ativa{display:block}
+h1.titulo{font-size:20px;font-weight:800;color:var(--verde-escuro);margin-bottom:4px}
+.subtitulo{font-size:13px;color:var(--texto-sec);margin-bottom:20px}
+/* ── componentes ── */
+.card{background:var(--card);border:1px solid var(--borda);border-radius:var(--radius);padding:18px 20px;box-shadow:var(--shadow)}
+label.lbl{display:block;font-size:11px;font-weight:700;color:var(--texto-sec);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px}
+.campo{width:100%;border:1px solid var(--borda);border-radius:var(--radius-sm);padding:9px 12px;font-family:inherit;font-size:14px;background:#fff;color:var(--texto)}
+.campo:focus{outline:none;border-color:var(--verde);box-shadow:0 0 0 3px rgba(10,159,130,.12)}
+textarea.campo{min-height:84px;resize:vertical}
+.btn{background:var(--verde);color:#fff;border:none;padding:10px 20px;border-radius:var(--radius-sm);font-family:inherit;font-weight:700;font-size:14px;cursor:pointer;display:inline-flex;align-items:center;gap:8px}
+.btn:hover{background:var(--verde-escuro)}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.btn.fantasma{background:#fff;color:var(--verde-escuro);border:1px solid var(--borda-forte)}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+/* ── stepper ── */
+.stepper{display:flex;gap:8px;margin-bottom:22px;flex-wrap:wrap}
+.step{flex:1;min-width:100px;padding:10px 8px;border-radius:10px;background:#fff;border:1px solid var(--borda);font-size:12px;color:var(--texto-sec);text-align:center}
+.step.ativa{background:var(--verde-suave);border-color:var(--verde-borda);color:var(--verde-escuro);font-weight:700}
+.step.feita{color:var(--verde)}
+.step b{display:block;font-size:15px;margin-bottom:2px}
+.etapa{display:none;border:none}
+.etapa.ativa{display:block}
+/* ── tabela / kpi / barras / pills ── */
+.tabela{width:100%;border-collapse:collapse;font-size:13px}
+.tabela th{text-align:left;color:var(--texto-sec);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px;padding:9px 10px;border-bottom:1px solid var(--borda)}
+.tabela td{padding:10px;border-bottom:1px solid var(--borda)}
+.tabela.clicavel tbody tr:hover{background:var(--verde-suave);cursor:pointer}
+.kpi{background:var(--verde-suave);border-radius:10px;padding:14px 16px}
+.kpi .num{font-size:24px;font-weight:800;color:var(--verde-escuro);font-family:'JetBrains Mono',monospace}
+.kpi .rotulo{font-size:12px;color:var(--texto-sec);margin-top:2px}
+.barra-trilho{background:var(--bg);border-radius:6px;height:10px;overflow:hidden}
+.barra{background:var(--verde);height:100%;border-radius:6px;transition:width .4s}
+.linha-barra{margin-bottom:11px}
+.linha-barra .top{display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px}
+.pill{font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;font-family:'JetBrains Mono',monospace}
+.pill.ok{background:var(--verde-suave);color:var(--verde-escuro)}
+.pill.pend{background:#FBF1DC;color:var(--alerta)}
+.pill.trat{background:#FCECEC;color:var(--erro)}
+.pill.neutro{background:#EEF2F1;color:var(--texto-sec)}
+/* ── toast ── */
+#toast{position:fixed;bottom:24px;right:24px;z-index:999;display:flex;flex-direction:column;gap:8px}
+.toast-item{background:var(--verde-mais-escuro);color:#fff;padding:12px 18px;border-radius:10px;font-size:13px;box-shadow:0 4px 16px rgba(0,0,0,.25)}
+.toast-item.erro{background:var(--erro)}
+.aviso-app{background:var(--verde-suave);border:1px solid var(--verde-borda);border-radius:var(--radius);padding:14px 16px;margin-top:16px}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="konsi-mark" viewBox="0 0 512 512">
+    <path fill-rule="evenodd" clip-rule="evenodd" d="M230.4 105V170.4L142 245V179.4L230.4 105ZM142 268.2V332.6L230.2 408V342.8L142 268.2ZM369.6 105V170.2C369.6 170.2 268.2 252 268.4 255.8C268.6 259.6 369.6 342.6 369.6 342.6V408C369.6 408 225.298 293.733 216.4 277.8C207.502 261.867 207.135 252.933 216.4 237C225.664 221.067 369.6 105 369.6 105Z" fill="#fff"/>
+  </symbol>
+</svg>
+
+<div id="tela-login">
+  <form class="login-card" id="form-login">
+    <div class="marca">
+      <div class="logo-box" style="width:40px;height:40px"><svg><use href="#konsi-mark"/></svg></div>
+      <div><div style="font-weight:800;color:var(--verde-escuro);font-size:16px">Konsi Jurídico</div>
+      <div style="font-size:11px;color:var(--texto-sec)">Gestão de contestações</div></div>
+    </div>
+    <label class="lbl" for="login-email">E-mail</label>
+    <input class="campo" id="login-email" type="email" required style="margin-bottom:14px" autocomplete="username">
+    <label class="lbl" for="login-senha">Senha</label>
+    <input class="campo" id="login-senha" type="password" required style="margin-bottom:20px" autocomplete="current-password">
+    <button class="btn" id="btn-entrar" type="submit" style="width:100%;justify-content:center;height:44px">Entrar</button>
+    <div id="link-esqueci" style="text-align:center;margin-top:14px;font-size:12px;color:var(--verde);cursor:pointer;font-weight:600">Esqueci minha senha</div>
+  </form>
+</div>
+
+<div id="app">
+  <aside class="sidebar">
+    <div class="marca">
+      <div class="logo-box" style="width:30px;height:30px"><svg><use href="#konsi-mark"/></svg></div>
+      Konsi Jurídico
+    </div>
+    <button class="nav-item ativo" id="nav-nova"       onclick="showPage('nova')">＋ Nova contestação</button>
+    <button class="nav-item" id="nav-historico"  onclick="showPage('historico')">≡ Histórico</button>
+    <button class="nav-item" id="nav-dashboard"  onclick="showPage('dashboard')">▤ Dashboard</button>
+    <button class="nav-item" id="nav-relatorios" onclick="showPage('relatorios')">▦ Relatórios</button>
+    <button class="nav-item" id="nav-importacao" onclick="showPage('importacao')">↥ Importar histórico</button>
+    <div style="flex:1"></div>
+    <button class="nav-item" id="btn-sair">⏻ Sair</button>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <div class="mono" id="crumb" style="font-size:12px;color:var(--texto-sec)">nova-contestacao</div>
+      <div class="quem">
+        <div style="text-align:right">
+          <div style="font-size:12px;font-weight:700" id="usuario-nome">—</div>
+          <div style="font-size:10px;color:var(--texto-sec)" id="usuario-cargo">—</div>
+        </div>
+        <div class="avatar" id="usuario-iniciais">–</div>
+      </div>
+    </header>
+    <main class="conteudo">
+      <section class="page ativa" id="page-nova"><h1 class="titulo">Nova contestação</h1><p class="subtitulo">Fluxo em 6 etapas — do recebimento da notificação à finalização.</p><div id="area-etapas"></div></section>
+      <section class="page" id="page-historico"><h1 class="titulo">Histórico</h1><p class="subtitulo">Contestações registradas no sistema. Clique numa linha para retomar.</p><div id="area-historico" class="card">Carregando…</div></section>
+      <section class="page" id="page-dashboard"><h1 class="titulo">Dashboard</h1><p class="subtitulo">Indicadores operacionais + histórico consolidado.</p><div id="area-dashboard">Carregando…</div></section>
+      <section class="page" id="page-relatorios"><h1 class="titulo">Relatórios</h1><p class="subtitulo">Consulta filtrada sobre operacional + histórico.</p><div id="area-relatorios"></div></section>
+      <section class="page" id="page-importacao"><h1 class="titulo">Importar histórico</h1><p class="subtitulo">Planilha antiga (.xlsx) → alimenta cohort e rankings.</p><div id="area-importacao"></div></section>
+    </main>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ════════ 0. CONFIG — preencher após Task 3 ════════ */
+const SUPABASE_URL = 'https://SEU_PROJECT_REF.supabase.co';
+const SUPABASE_ANON_KEY = 'SUA_CHAVE_ANON_AQUI';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+/* ════════ helpers de UI ════════ */
+const $ = (id) => document.getElementById(id);
+const val = (id) => ($(id) ? $(id).value.trim() : '');
+const num = (id) => { const v = val(id).replace(/\./g,'').replace(',','.'); return v ? Number(v) : null; };
+function toast(msg, tipo='ok'){
+  const el = document.createElement('div');
+  el.className = 'toast-item' + (tipo==='erro' ? ' erro' : '');
+  el.textContent = msg;
+  $('toast').appendChild(el);
+  setTimeout(()=>el.remove(), 4200);
+}
+function fmtData(d){ if(!d) return '—'; const [a,m,dia]=String(d).slice(0,10).split('-'); return `${dia}/${m}/${a}`; }
+function iniciais(nome){ return nome.split(' ').filter(Boolean).map(p=>p[0]).slice(0,2).join('').toUpperCase(); }
+
+/* ════════ navegação ════════ */
+const PAGINAS = ['nova','historico','dashboard','relatorios','importacao'];
+function showPage(nome){
+  PAGINAS.forEach(p=>{
+    $('page-'+p).classList.toggle('ativa', p===nome);
+    $('nav-'+p).classList.toggle('ativo', p===nome);
+  });
+  $('crumb').textContent = {nova:'nova-contestacao',historico:'historico',dashboard:'dashboard',relatorios:'relatorios',importacao:'importar-historico'}[nome];
+  if(nome==='historico' && typeof carregarHistorico==='function') carregarHistorico();
+  if(nome==='dashboard' && typeof carregarDashboard==='function') carregarDashboard();
+}
+</script>
+</body>
+</html>
+```
+
+- [ ] **Step 2: Verificar no browser**
+
+```bash
+cd /c/repos/konsi-juridico && python -m http.server 8300
+```
+
+Abrir `http://localhost:8300/konsi-contestacoes.html`. Esperado: tela de login verde-escura com logo Konsi, sem erros no console **exceto** falha de rede do Supabase (config placeholder — ok nesta task). Forçar `document.getElementById('app').classList.add('logado'); document.getElementById('tela-login').style.display='none'` no console → shell aparece com sidebar/topbar e navegação alternando as 5 páginas.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add konsi-contestacoes.html
+git commit -m "feat: esqueleto do front-end (CSS legado + logo real + shell + navegação)"
+```
+
+---
+
+## Fase 3 — Autenticação
+
+### Task 5: Login, logout, sessão e logs
+
+**Files:**
+- Modify: `konsi-contestacoes.html` (bloco `<script>`)
+- Reference: `cliente-supabase-exemplo.js:29-83` (auth) e `:350-383` (logs)
+
+- [ ] **Step 1: Colar a camada de auth + logs**
+
+Copiar para o `<script>`, logo após a seção de navegação, as funções de `cliente-supabase-exemplo.js`:
+- `fazerLogin`, `fazerLogout`, `verificarSessaoAtiva`, `solicitarRecuperacaoSenha` (linhas 33–83)
+- `registrarLog`, `buscarLogsContestacao` (linhas 354–383)
+
+⚠️ Em TODAS: renomear `supabase` → `sb` (o client local). Em `solicitarRecuperacaoSenha`, manter `redirectTo: window.location.origin + window.location.pathname.replace('konsi-contestacoes.html','redefinir-senha.html')`.
+
+- [ ] **Step 2: Escrever o wiring da UI (código completo)**
+
+```js
+/* ════════ auth: wiring ════════ */
+let perfilAtual = null;
+function iniciarApp(perfil){
+  perfilAtual = perfil;
+  $('tela-login').style.display = 'none';
+  $('app').classList.add('logado');
+  $('usuario-nome').textContent = perfil.nome_completo;
+  $('usuario-cargo').textContent = perfil.cargo;
+  $('usuario-iniciais').textContent = iniciais(perfil.nome_completo);
+  showPage('nova');
+}
+$('form-login').addEventListener('submit', async (ev)=>{
+  ev.preventDefault();
+  const btn = $('btn-entrar'); btn.disabled = true; btn.textContent = 'Entrando…';
+  try {
+    const { perfil } = await fazerLogin(val('login-email'), $('login-senha').value);
+    iniciarApp(perfil);
+  } catch(e){ toast(e.message, 'erro'); }
+  finally { btn.disabled = false; btn.textContent = 'Entrar'; }
+});
+$('link-esqueci').addEventListener('click', async ()=>{
+  const email = val('login-email');
+  if(!email) return toast('Preencha o e-mail primeiro.', 'erro');
+  try { await solicitarRecuperacaoSenha(email); toast('E-mail de recuperação enviado.'); }
+  catch(e){ toast('Falha: ' + e.message, 'erro'); }
+});
+$('btn-sair').addEventListener('click', async ()=>{
+  await fazerLogout();
+  location.reload();
+});
+window.addEventListener('DOMContentLoaded', async ()=>{
+  try { const s = await verificarSessaoAtiva(); if(s) iniciarApp(s.perfil); } catch(_){}
+});
+```
+
+- [ ] **Step 3: Preencher a CONFIG real** (URL + anon key da Task 3) no topo do script.
+
+- [ ] **Step 4: Verificação integrada**
+
+1. Login com julianabacelar@konsi.com.br → shell abre, topbar mostra "Juliana Bacelar · Responsável pelas Contestações".
+2. F5 → sessão restaurada sem pedir login.
+3. Senha errada → toast "E-mail ou senha incorretos."
+4. Sair → volta ao login.
+5. No Supabase, Table Editor → `logs_auditoria` tem a linha `LOGIN`.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add konsi-contestacoes.html
+git commit -m "feat: autenticação Supabase (login/logout/sessão/recuperação) + log de auditoria"
+```
+
+---
+
+## Fase 4 — Nova contestação (6 etapas)
+
+### Task 6: Stepper + Etapa 1 (Recepção)
+
+**Files:**
+- Modify: `konsi-contestacoes.html` (`#area-etapas` markup + script)
+- Reference: `cliente-supabase-exemplo.js:91-112` (`criarContestacaoEtapa1`)
+
+- [ ] **Step 1: Markup das etapas dentro de `#area-etapas`** (substituir a div vazia)
+
+```html
+<div id="area-etapas">
+  <div class="stepper" id="stepper"></div>
+
+  <fieldset class="etapa ativa" id="etapa-1">
+    <div class="grid-2">
+      <div><label class="lbl">Nome do cliente *</label><input class="campo" id="e1-nome"></div>
+      <div><label class="lbl">CPF *</label><input class="campo" id="e1-cpf" placeholder="000.000.000-00" maxlength="14"></div>
+      <div><label class="lbl">ADE / contrato</label><input class="campo" id="e1-ade"></div>
+      <div><label class="lbl">Banco</label><input class="campo" id="e1-banco"></div>
+      <div><label class="lbl">Motivo</label><select class="campo" id="e1-motivo"></select></div>
+      <div><label class="lbl">Canal</label><select class="campo" id="e1-canal"></select></div>
+      <div><label class="lbl">Data de recebimento</label><input class="campo" id="e1-data-recebimento" type="date"></div>
+    </div>
+    <p style="font-size:12px;color:var(--texto-sec);margin-top:10px">ℹ️ O nome é gravado em MAIÚSCULO automaticamente pelo banco de dados.</p>
+  </fieldset>
+
+  <fieldset class="etapa" id="etapa-2">
+    <div class="grid-2">
+      <div><label class="lbl">Convênio</label><select class="campo" id="e2-convenio"></select></div>
+      <div><label class="lbl">Operação</label><select class="campo" id="e2-operacao"></select></div>
+      <div><label class="lbl">Valor liberado (R$)</label><input class="campo" id="e2-valor" inputmode="decimal"></div>
+      <div><label class="lbl">Valor da parcela (R$)</label><input class="campo" id="e2-parcela" inputmode="decimal"></div>
+      <div><label class="lbl">Qtd. parcelas</label><input class="campo" id="e2-qtd" type="number" min="1"></div>
+      <div><label class="lbl">Data da operação</label><input class="campo" id="e2-data-finalizacao" type="date"></div>
+      <div><label class="lbl">Nº processo judicial</label><input class="campo" id="e2-processo"></div>
+      <div><label class="lbl">Responsável</label><select class="campo" id="e2-responsavel"></select></div>
+      <div><label class="lbl">Nível de risco</label><select class="campo" id="e2-risco"></select></div>
+    </div>
+    <div style="margin-top:14px"><label class="lbl">Descrição dos fatos</label><textarea class="campo" id="e2-fatos"></textarea></div>
+    <div style="margin-top:14px"><label class="lbl">Observação interna</label><textarea class="campo" id="e2-obs"></textarea></div>
+  </fieldset>
+
+  <fieldset class="etapa" id="etapa-3">
+    <div class="grid-2">
+      <div><label class="lbl">Situação das evidências</label><select class="campo" id="e3-evidencias"></select></div>
+      <div><label class="lbl">Link do arquivo de evidência (Drive)</label><input class="campo" id="e3-arquivo-url" placeholder="https://drive.google.com/…"></div>
+      <div><label class="lbl">Conversas no Hyperflow?</label><select class="campo" id="e3-hyperflow"><option value="">—</option><option value="true">Sim</option><option value="false">Não</option></select></div>
+    </div>
+    <div class="aviso-app">
+      <label style="display:flex;align-items:center;gap:10px;font-weight:700;color:var(--verde-escuro);cursor:pointer">
+        <input type="checkbox" id="e3-via-app" style="width:16px;height:16px;accent-color:#0A9F82"> Operação via app Konsi
+      </label>
+      <label style="display:flex;align-items:center;gap:10px;font-size:13px;margin-top:10px;cursor:pointer">
+        <input type="checkbox" id="e3-procedimento" style="width:16px;height:16px;accent-color:#0A9F82">
+        Confirmo que o procedimento de utilização do app será anexado ao laudo <span style="color:var(--erro);font-weight:700">*obrigatório se via app</span>
+      </label>
+    </div>
+  </fieldset>
+
+  <fieldset class="etapa" id="etapa-4">
+    <div class="card"><div class="mono" style="font-size:11px;color:var(--texto-sec);margin-bottom:10px">PRÉVIA — projeção sem IA</div>
+    <div id="previa-texto" style="font-size:13px;line-height:1.8;white-space:pre-wrap">—</div></div>
+  </fieldset>
+
+  <fieldset class="etapa" id="etapa-5">
+    <div style="display:flex;gap:10px;margin-bottom:14px">
+      <button class="btn" id="btn-gerar-laudo" type="button">✦ Elaborar laudo com IA</button>
+    </div>
+    <label class="lbl">Laudo (editável)</label>
+    <textarea class="campo" id="laudo-texto" style="min-height:260px"></textarea>
+  </fieldset>
+
+  <fieldset class="etapa" id="etapa-6">
+    <div class="grid-2">
+      <div><label class="lbl">Protocolo de envio</label><input class="campo" id="e6-protocolo"></div>
+      <div><label class="lbl">Data da resposta</label><input class="campo" id="e6-data-resposta" type="date"></div>
+      <div><label class="lbl">Advogado responsável</label><input class="campo" id="e6-advogado"></div>
+      <div><label class="lbl">Lista de restrição</label><input class="campo" id="e6-lista-restricao"></div>
+    </div>
+    <label style="display:flex;align-items:center;gap:10px;font-weight:700;margin-top:16px;cursor:pointer">
+      <input type="checkbox" id="e6-envio-confirmado" style="width:16px;height:16px;accent-color:#0A9F82"> Confirmo o envio da resposta
+    </label>
+  </fieldset>
+
+  <div style="display:flex;justify-content:space-between;margin-top:22px">
+    <button class="btn fantasma" id="btn-anterior" type="button">‹ Anterior</button>
+    <div style="display:flex;gap:10px">
+      <button class="btn fantasma" id="btn-pendente" type="button">Salvar como pendente</button>
+      <button class="btn" id="btn-proxima" type="button">Próxima ›</button>
+    </div>
+  </div>
+</div>
+```
+
+- [ ] **Step 2: Colar a camada de dados da etapa 1 + escrever o controlador (código completo)**
+
+Copiar `criarContestacaoEtapa1` de `cliente-supabase-exemplo.js:91-112` (renomear `supabase`→`sb`). Depois adicionar:
+
+```js
+/* ════════ etapas: estado + opções ════════ */
+const OPCOES = {
+  motivo:['NÃO RECONHECE','FRAUDE','CANCELAMENTO','DESACORDO COMERCIAL','SUPERENDIVIDAMENTO','REVISIONAL','EXIBICAO DOCUMENTO','VENDA CASADA','SEGREDO DE JUSTIÇA'],
+  canal:['Judicial','SAC Banco','E-mail','BACEN','Procon','Reclame Aqui','Consumidor.gov','Sistema Contest'],
+  responsavel:['Konsi','Banco','SEGREDO DE JUSTIÇA'],
+  risco:['Baixo','Médio','Alto','SEGREDO DE JUSTIÇA'],
+  evidencias:['Com evidências','Sem evidências','Dispensa evidência','A definir'],
+  convenio:['INSS','GOV BA','GOV SP'],
+  operacao:['Novo','Portabilidade','Refinanciamento','Cartão RMC','Cartão RCC'],  // validar lista com o jurídico
+};
+function preencherSelect(id, lista){ $(id).innerHTML = '<option value="">—</option>' + lista.map(o=>`<option>${o}</option>`).join(''); }
+preencherSelect('e1-motivo', OPCOES.motivo);   preencherSelect('e1-canal', OPCOES.canal);
+preencherSelect('e2-convenio', OPCOES.convenio); preencherSelect('e2-operacao', OPCOES.operacao);
+preencherSelect('e2-responsavel', OPCOES.responsavel); preencherSelect('e2-risco', OPCOES.risco);
+preencherSelect('e3-evidencias', OPCOES.evidencias);
+$('e1-data-recebimento').value = new Date().toISOString().slice(0,10);
+$('e1-cpf').addEventListener('input', (e)=>{                       // máscara CPF
+  let v = e.target.value.replace(/\D/g,'').slice(0,11);
+  e.target.value = v.replace(/(\d{3})(\d)/,'$1.$2').replace(/(\d{3})(\d)/,'$1.$2').replace(/(\d{3})(\d{1,2})$/,'$1-$2');
+});
+
+const NOMES_ETAPAS = ['Recepção','Operação','Subsídios','Prévia','Elaboração','Finalização'];
+let contestacaoAtual = null;
+let etapa = 1;
+function renderStepper(){
+  $('stepper').innerHTML = NOMES_ETAPAS.map((n,i)=>{
+    const k = i+1, cls = k===etapa ? 'ativa' : (k<etapa ? 'feita' : '');
+    return `<div class="step ${cls}"><b>${k<etapa?'✓':k}</b>${n}</div>`;
+  }).join('');
+  for(let i=1;i<=6;i++) $('etapa-'+i).classList.toggle('ativa', i===etapa);
+  $('btn-anterior').style.visibility = etapa===1 ? 'hidden' : 'visible';
+  $('btn-proxima').textContent = etapa===6 ? '✓ Finalizar contestação' : 'Próxima ›';
+}
+renderStepper();
+
+/* etapa 1 → cria o registro */
+const RE_CPF = /^\d{3}\.?\d{3}\.?\d{3}-?\d{2}$/;
+async function salvarEtapa1(){
+  if(!val('e1-nome')) throw new Error('Nome é obrigatório.');
+  if(!RE_CPF.test(val('e1-cpf'))) throw new Error('CPF inválido.');
+  const dados = { nome: val('e1-nome'), cpf: val('e1-cpf'), ade: val('e1-ade')||null,
+    banco: val('e1-banco')||null, motivo: val('e1-motivo')||null, canal: val('e1-canal')||null,
+    dataRecebimento: val('e1-data-recebimento')||null };
+  if(!contestacaoAtual){ contestacaoAtual = await criarContestacaoEtapa1(dados); }
+  else {
+    const { data, error } = await sb.from('contestacoes').update({
+      nome_cliente: dados.nome, cpf: dados.cpf, ade: dados.ade, banco: dados.banco,
+      motivo: dados.motivo, canal: dados.canal, data_recebimento: dados.dataRecebimento
+    }).eq('id', contestacaoAtual.id).select().single();
+    if(error) throw error; contestacaoAtual = data;
+  }
+}
+
+$('btn-anterior').addEventListener('click', ()=>{ if(etapa>1){ etapa--; renderStepper(); } });
+$('btn-proxima').addEventListener('click', avancar);
+async function avancar(){
+  const btn = $('btn-proxima'); btn.disabled = true;
+  try {
+    if(etapa===1) await salvarEtapa1();
+    // etapas 2,3,5,6 são adicionadas nas Tasks 7–9
+    if(etapa<6){ etapa++; renderStepper(); toast(`Etapa ${etapa-1} salva.`); }
+  } catch(e){ toast(e.message || String(e), 'erro'); }
+  finally { btn.disabled = false; }
+}
+```
+
+- [ ] **Step 3: Verificação integrada**
+
+Login → preencher etapa 1 (nome minúsculo de propósito) → Próxima. Esperado: toast "Etapa 1 salva", stepper avança. No Table Editor: linha em `contestacoes` com `nome_cliente` em MAIÚSCULO (trigger), `etapa_atual='1_recepcao'`. CPF inválido → toast de erro, não avança.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add konsi-contestacoes.html
+git commit -m "feat: stepper 6 etapas + etapa 1 (recepção) criando contestação no Supabase"
+```
+
+### Task 7: Etapas 2 (Operação) e 3 (Subsídios) com validações
+
+**Files:**
+- Modify: `konsi-contestacoes.html`
+- Reference: `cliente-supabase-exemplo.js:115-138` e `:141-169`
+
+- [ ] **Step 1: Colar `atualizarContestacaoEtapa2` (linhas 115-138) e `atualizarContestacaoEtapa3` (linhas 141-169)** — renomear `supabase`→`sb`.
+
+- [ ] **Step 2: Escrever os coletores e ligar no `avancar()` (código completo)**
+
+```js
+async function salvarEtapa2(){
+  contestacaoAtual = await atualizarContestacaoEtapa2(contestacaoAtual.id, {
+    convenio: val('e2-convenio')||null, operacao: val('e2-operacao')||null,
+    valorLiberado: num('e2-valor'), valorParcela: num('e2-parcela'),
+    qtdParcelas: val('e2-qtd') ? Number(val('e2-qtd')) : null,
+    dataFinalizacao: val('e2-data-finalizacao')||null, processo: val('e2-processo')||null,
+    responsavel: val('e2-responsavel')||null, risco: val('e2-risco')||null,
+    fatos: val('e2-fatos')||null, observacao: val('e2-obs')||null,
+  });
+}
+async function salvarEtapa3(){
+  contestacaoAtual = await atualizarContestacaoEtapa3(contestacaoAtual.id, {
+    situacaoEvidencias: val('e3-evidencias')||null,
+    arquivoEvidenciaUrl: val('e3-arquivo-url')||null,
+    temConversasHyperflow: val('e3-hyperflow')==='' ? null : val('e3-hyperflow')==='true',
+    operacaoViaApp: $('e3-via-app').checked,
+    procedimentoAppConfirmado: $('e3-procedimento').checked,
+  });
+}
+```
+
+No `avancar()`, completar o switch:
+
+```js
+    if(etapa===1) await salvarEtapa1();
+    if(etapa===2) await salvarEtapa2();
+    if(etapa===3) await salvarEtapa3();
+    if(etapa===3 && typeof montarPrevia==='function') montarPrevia();   // etapa 4; função criada na Task 8
+```
+
+(As validações "via app exige procedimento confirmado" e "Com evidências exige arquivo" já vêm dentro de `atualizarContestacaoEtapa3` — lançam `Error` que vira toast.)
+
+- [ ] **Step 3: Verificação integrada**
+
+Etapa 2 completa → avança (`etapa_atual='2_operacao'` no banco, valores numéricos corretos). Etapa 3: marcar "via app" SEM o procedimento → toast de erro e não avança; marcar os dois → avança (`operacao_via_app=true`, `procedimento_app_confirmado=true`). Selecionar "Com evidências" sem link → erro.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add konsi-contestacoes.html
+git commit -m "feat: etapas 2 e 3 com validações de app Konsi e evidências"
+```
+
+### Task 8: Etapa 4 (Prévia) e Etapa 5 (Laudo via Edge Function)
+
+**Files:**
+- Modify: `konsi-contestacoes.html`
+- Reference: `cliente-supabase-exemplo.js:172-187` (`gerarLaudo`)
+
+- [ ] **Step 1: Escrever a prévia (código completo)**
+
+```js
+function montarPrevia(){
+  const c = contestacaoAtual;
+  $('previa-texto').textContent =
+`IDENTIFICAÇÃO DA OPERAÇÃO
+Cliente: ${c.nome_cliente} — CPF ${c.cpf}
+Convênio: ${c.convenio||'—'} · Banco: ${c.banco||'—'} · ADE: ${c.ade||'—'}
+Operação: ${c.operacao||'—'}${c.valor_liberado ? ' · Valor liberado: R$ '+Number(c.valor_liberado).toLocaleString('pt-BR',{minimumFractionDigits:2}) : ''}
+
+DESCRIÇÃO DOS FATOS ALEGADOS
+Motivo: ${c.motivo||'—'} · Canal: ${c.canal||'—'}
+${c.descricao_fatos || 'A parte alega desconhecimento da contratação.'}
+
+SUBSÍDIOS
+Evidências: ${c.situacao_evidencias||'—'} · Hyperflow: ${c.tem_conversas_hyperflow===true?'SIM':c.tem_conversas_hyperflow===false?'NÃO':'—'} · Via app Konsi: ${c.operacao_via_app?'SIM':'NÃO'}
+
+(Prévia para conferência. O laudo completo é elaborado na próxima etapa, com IA.)`;
+}
+```
+
+- [ ] **Step 2: Colar `gerarLaudo` (linhas 172-187, renomear `supabase`→`sb` e `SUPABASE_URL` já existe) e escrever o wiring**
+
+```js
+$('btn-gerar-laudo').addEventListener('click', async ()=>{
+  const btn = $('btn-gerar-laudo');
+  btn.disabled = true; btn.textContent = 'Gerando… (30-60s)';
+  try {
+    const laudo = await gerarLaudo(contestacaoAtual.id);
+    $('laudo-texto').value = laudo;
+    contestacaoAtual.laudo_texto = laudo;
+    toast('Laudo gerado.');
+  } catch(e){ toast('Falha ao gerar laudo: ' + e.message, 'erro'); }
+  finally { btn.disabled = false; btn.textContent = '✦ Elaborar laudo com IA'; }
+});
+```
+
+E no `avancar()`, ao sair da etapa 5, persistir edições manuais do texto:
+
+```js
+    if(etapa===5){
+      const editado = $('laudo-texto').value.trim();
+      if(!editado) throw new Error('Gere o laudo antes de avançar.');
+      if(editado !== (contestacaoAtual.laudo_texto||'')){
+        const { error } = await sb.from('contestacoes').update({ laudo_texto: editado }).eq('id', contestacaoAtual.id);
+        if(error) throw error;
+        contestacaoAtual.laudo_texto = editado;
+      }
+    }
+```
+
+- [ ] **Step 3: Verificação integrada**
+
+Etapa 4 mostra a prévia com os dados reais. Etapa 5: clicar "Elaborar laudo" → botão trava, laudo aparece no textarea (termina com "…IMPROCEDENTE."); no banco `laudo_texto` preenchido, `etapa_atual='5_elaboracao'`, log `LAUDO_GERADO` em `logs_auditoria`. Editar o texto e avançar → banco reflete a edição. Teste negativo: numa contestação com `via app` marcado e procedimento desmarcado (via Table Editor), gerar laudo → erro 422 vira toast.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add konsi-contestacoes.html
+git commit -m "feat: prévia textual + laudo via Edge Function gerar-laudo (com edição manual)"
+```
+
+### Task 9: Etapa 6 (Finalização) + salvar pendente
+
+**Files:**
+- Modify: `konsi-contestacoes.html`
+- Reference: `cliente-supabase-exemplo.js:190-232` (`finalizarContestacao`, `salvarComoPendente`) e `:239-254` (`sincronizarComGoogle`)
+
+- [ ] **Step 1: Colar `finalizarContestacao`, `salvarComoPendente` e `sincronizarComGoogle`** (renomear `supabase`→`sb`).
+
+- [ ] **Step 2: Ligar no `avancar()` e no botão pendente (código completo)**
+
+```js
+    if(etapa===6){
+      await finalizarContestacao(contestacaoAtual.id, {
+        protocolo: val('e6-protocolo')||null, dataResposta: val('e6-data-resposta')||null,
+        listaRestricao: val('e6-lista-restricao')||null, advogado: val('e6-advogado')||null,
+        envioConfirmado: $('e6-envio-confirmado').checked,
+      });
+      toast('Contestação finalizada. Sincronização com Drive/Sheets disparada.');
+      novaContestacao();
+      showPage('historico');
+      return;
+    }
+```
+
+```js
+function novaContestacao(){
+  contestacaoAtual = null; etapa = 1;
+  document.querySelectorAll('#area-etapas input, #area-etapas textarea, #area-etapas select').forEach(el=>{
+    if(el.type==='checkbox') el.checked = false; else el.value = '';
+  });
+  $('e1-data-recebimento').value = new Date().toISOString().slice(0,10);
+  renderStepper();
+}
+$('nav-nova').addEventListener('click', ()=>{ if(!contestacaoAtual) novaContestacao(); });
+$('btn-pendente').addEventListener('click', async ()=>{
+  if(!contestacaoAtual) return toast('Complete a etapa 1 primeiro.', 'erro');
+  try {
+    await salvarComoPendente(contestacaoAtual.id, {});
+    toast('Salvo como pendente. Retome pelo Histórico.');
+    novaContestacao(); showPage('historico');
+  } catch(e){ toast(e.message, 'erro'); }
+});
+```
+
+- [ ] **Step 3: Verificação integrada**
+
+Finalizar sem o checkbox → toast "Confirme o envio…". Com checkbox → status `Finalizado`, `etapa_atual='6_finalizado'`, log `CONTESTACAO_FINALIZADA`; se secrets Google configurados, pasta "NOME - CPF" criada no Drive + linha no Sheets + `link_pasta_drive` preenchido (se não configurados, o erro do sync aparece só no console — não bloqueia). "Salvar como pendente" numa contestação em etapa 3 → `status='Pendente'`.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add konsi-contestacoes.html
+git commit -m "feat: finalização com sync Drive/Sheets em background + salvar pendente"
+```
+
+---
+
+## Fase 5 — Histórico
+
+### Task 10: Listagem + retomar contestação
+
+**Files:**
+- Modify: `konsi-contestacoes.html` (`#area-historico` + script)
+
+- [ ] **Step 1: Escrever o carregador e o "retomar" (código completo)**
+
+```js
+/* ════════ histórico ════════ */
+function pillStatus(s){
+  const cls = s==='Finalizado' ? 'ok' : s==='Pendente' ? 'pend' : 'trat';
+  return `<span class="pill ${cls}">${s}</span>`;
+}
+async function carregarHistorico(){
+  const area = $('area-historico');
+  area.innerHTML = 'Carregando…';
+  const { data, error } = await sb.from('contestacoes').select('*')
+    .order('criado_em', { ascending:false }).limit(300);
+  if(error){ area.innerHTML = 'Erro: ' + error.message; return; }
+  if(!data.length){ area.innerHTML = 'Nenhuma contestação registrada ainda.'; return; }
+  area.innerHTML = `<table class="tabela clicavel"><thead><tr>
+    <th>Cliente</th><th>Banco</th><th>Motivo</th><th>Recebida</th><th>Etapa</th><th>Status</th>
+  </tr></thead><tbody>` + data.map(c=>`
+    <tr data-id="${c.id}">
+      <td>${c.nome_cliente}</td><td>${c.banco||'—'}</td><td>${c.motivo||'—'}</td>
+      <td class="mono">${fmtData(c.data_recebimento)}</td>
+      <td class="mono" style="color:var(--texto-sec)">${c.etapa_atual[0]}/6</td>
+      <td>${pillStatus(c.status)}</td>
+    </tr>`).join('') + '</tbody></table>';
+  area.querySelectorAll('tr[data-id]').forEach(tr=>{
+    tr.addEventListener('click', ()=> retomarContestacao(data.find(c=>c.id===tr.dataset.id)));
+  });
+}
+function set(id, v){ if($(id)) $(id).value = v ?? ''; }
+function retomarContestacao(c){
+  contestacaoAtual = c;
+  etapa = Number(c.etapa_atual[0]) || 1;
+  set('e1-nome', c.nome_cliente); set('e1-cpf', c.cpf); set('e1-ade', c.ade);
+  set('e1-banco', c.banco); set('e1-motivo', c.motivo); set('e1-canal', c.canal);
+  set('e1-data-recebimento', c.data_recebimento);
+  set('e2-convenio', c.convenio); set('e2-operacao', c.operacao);
+  set('e2-valor', c.valor_liberado); set('e2-parcela', c.valor_parcela); set('e2-qtd', c.qtd_parcelas);
+  set('e2-data-finalizacao', c.data_finalizacao_proposta); set('e2-processo', c.numero_processo_judicial);
+  set('e2-responsavel', c.responsavel); set('e2-risco', c.nivel_risco);
+  set('e2-fatos', c.descricao_fatos); set('e2-obs', c.observacao_interna);
+  set('e3-evidencias', c.situacao_evidencias); set('e3-arquivo-url', c.arquivo_evidencia_url);
+  set('e3-hyperflow', c.tem_conversas_hyperflow===true ? 'true' : c.tem_conversas_hyperflow===false ? 'false' : '');
+  $('e3-via-app').checked = !!c.operacao_via_app;
+  $('e3-procedimento').checked = !!c.procedimento_app_confirmado;
+  set('laudo-texto', c.laudo_texto);
+  set('e6-protocolo', c.protocolo_envio); set('e6-data-resposta', c.data_resposta);
+  set('e6-advogado', c.advogado_responsavel); set('e6-lista-restricao', c.lista_restricao);
+  $('e6-envio-confirmado').checked = !!c.envio_confirmado;
+  if(etapa===4) montarPrevia();
+  renderStepper();
+  showPage('nova');
+  toast(`Retomando: ${c.nome_cliente} (etapa ${etapa}).`);
+}
+```
+
+- [ ] **Step 2: Verificação integrada**
+
+Histórico lista as contestações criadas nas tasks anteriores, mais recente primeiro, com pills de status. Clicar numa pendente de etapa 3 → volta pra tela Nova na etapa 3 com todos os campos preenchidos; avançar continua o fluxo normalmente.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add konsi-contestacoes.html
+git commit -m "feat: histórico com retomada de contestação em qualquer etapa"
+```
+
+---
+
+## Fase 6 — Dashboard
+
+### Task 11: KPIs, rankings, tempo médio, cohort e volume
+
+**Files:**
+- Modify: `konsi-contestacoes.html` (`#area-dashboard` + script)
+- Reference: `cliente-supabase-exemplo.js:261-295` (buscadores das views)
+
+- [ ] **Step 1: Colar os buscadores** `buscarKpisDashboard`, `buscarRankingBancos`, `buscarRankingProdutos`, `buscarTempoMedioResumo`, `buscarCohortMensal`, `buscarVolumeMensal` (linhas 261-295, renomear `supabase`→`sb`).
+
+- [ ] **Step 2: Escrever o renderizador (código completo)**
+
+```js
+/* ════════ dashboard ════════ */
+const FAIXAS_COHORT = ['0-30 dias','31-60 dias','61-90 dias','91-180 dias','181-365 dias','mais de 365 dias'];
+function barras(titulo, linhas, campoLabel, campoValor){
+  if(!linhas.length) return `<div class="card"><label class="lbl">${titulo}</label><p style="color:var(--texto-sec);font-size:13px">Sem dados.</p></div>`;
+  const max = Math.max(...linhas.map(l=>Number(l[campoValor])));
+  return `<div class="card"><label class="lbl">${titulo}</label>` + linhas.slice(0,8).map(l=>`
+    <div class="linha-barra"><div class="top"><span>${l[campoLabel]}</span>
+    <span class="mono" style="color:var(--texto-sec)">${l[campoValor]}</span></div>
+    <div class="barra-trilho"><div class="barra" style="width:${Math.round(Number(l[campoValor])/max*100)}%"></div></div></div>`).join('') + '</div>';
+}
+async function carregarDashboard(){
+  const area = $('area-dashboard');
+  area.textContent = 'Carregando…';
+  try {
+    const [kpis, bancos, produtos, tempos, cohort, volume] = await Promise.all([
+      buscarKpisDashboard(), buscarRankingBancos(), buscarRankingProdutos(),
+      buscarTempoMedioResumo(), buscarCohortMensal(), buscarVolumeMensal(),
+    ]);
+    const geral = tempos.find(t=>t.recorte==='geral') || {};
+    const meses = [...new Set(cohort.map(c=>c.mes_operacao))].sort();
+    const cohortHtml = !meses.length ? '<p style="color:var(--texto-sec);font-size:13px">Sem dados (importe o histórico).</p>' :
+      `<table class="tabela"><thead><tr><th>Mês da operação</th>${FAIXAS_COHORT.map(f=>`<th>${f}</th>`).join('')}</tr></thead><tbody>` +
+      meses.map(m=>{
+        const cels = FAIXAS_COHORT.map(f=>{
+          const r = cohort.find(c=>c.mes_operacao===m && c.faixa_dias===f);
+          return `<td class="mono">${r ? r.total_operacoes : '·'}</td>`;
+        }).join('');
+        return `<tr><td class="mono">${fmtData(m).slice(3)}</td>${cels}</tr>`;
+      }).join('') + '</tbody></table>';
+    area.innerHTML = `
+      <div class="grid-4" style="margin-bottom:18px">
+        <div class="kpi"><div class="num">${kpis.total_ativo_sistema}</div><div class="rotulo">No sistema</div></div>
+        <div class="kpi"><div class="num">${kpis.total_pendentes}</div><div class="rotulo">Pendentes</div></div>
+        <div class="kpi"><div class="num">${kpis.total_finalizadas_sistema}</div><div class="rotulo">Finalizadas</div></div>
+        <div class="kpi"><div class="num">${kpis.media_dias_geral ?? '—'}</div><div class="rotulo">Dias médios até contestação</div></div>
+      </div>
+      <div class="grid-2" style="margin-bottom:14px">
+        ${barras('Ranking de bancos', bancos, 'banco', 'total_contestacoes')}
+        ${barras('Ranking de produtos', produtos, 'produto', 'total_contestacoes')}
+      </div>
+      <div class="grid-2" style="margin-bottom:14px">
+        ${barras('Volume mensal (recebidas)', volume.slice(-8).map(v=>({mes:fmtData(v.mes).slice(3), total:v.total_contestacoes})), 'mes', 'total')}
+        <div class="card"><label class="lbl">Tempo até contestação</label>
+          <p style="font-size:13px;line-height:2">Mediana geral: <b class="mono">${geral.mediana_dias ?? '—'} dias</b> · Amostras: <b class="mono">${geral.total_amostras ?? 0}</b></p>
+          ${tempos.filter(t=>t.recorte==='banco').slice(0,5).map(t=>`<p style="font-size:12.5px;color:var(--texto-sec)">${t.chave}: <span class="mono">${t.media_dias} dias (méd.)</span></p>`).join('')}
+        </div>
+      </div>
+      <div class="card"><label class="lbl">Cohort mensal — mês da operação × dias até contestação</label>${cohortHtml}</div>
+      <p style="font-size:12px;color:var(--texto-sec);margin-top:10px">Total geral (com histórico): <b class="mono">${kpis.total_geral_com_historico}</b> · No mês atual: <b class="mono">${kpis.total_mes_atual}</b></p>`;
+  } catch(e){ area.textContent = 'Erro ao carregar dashboard: ' + e.message; }
+}
+```
+
+- [ ] **Step 3: Verificação integrada**
+
+Dashboard carrega sem erro com os dados de teste; KPIs batem com contagens do Table Editor. Cohort/tempo médio mostram "Sem dados" antes da importação (esperado) — revalidar após Task 13.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add konsi-contestacoes.html
+git commit -m "feat: dashboard com KPIs, rankings, tempo médio, cohort e volume mensal"
+```
+
+---
+
+## Fase 7 — Relatórios
+
+### Task 12: Filtros + tabela + exportar CSV
+
+**Files:**
+- Modify: `konsi-contestacoes.html` (`#area-relatorios` + script)
+- Reference: `cliente-supabase-exemplo.js:298-313` (`gerarRelatorio`)
+
+- [ ] **Step 1: Markup dentro de `#area-relatorios`**
+
+```html
+<div class="card" style="margin-bottom:14px">
+  <div class="grid-3">
+    <div><label class="lbl">De</label><input class="campo" id="r-de" type="date"></div>
+    <div><label class="lbl">Até</label><input class="campo" id="r-ate" type="date"></div>
+    <div><label class="lbl">Banco</label><input class="campo" id="r-banco" placeholder="(todos)"></div>
+    <div><label class="lbl">Convênio</label><select class="campo" id="r-convenio"></select></div>
+    <div><label class="lbl">Operação</label><select class="campo" id="r-operacao"></select></div>
+    <div><label class="lbl">Motivo</label><select class="campo" id="r-motivo"></select></div>
+    <div><label class="lbl">Canal</label><select class="campo" id="r-canal"></select></div>
+    <div><label class="lbl">Status</label><select class="campo" id="r-status"></select></div>
+  </div>
+  <div style="display:flex;gap:10px;margin-top:14px">
+    <button class="btn" id="btn-gerar-relatorio" type="button">Gerar relatório</button>
+    <button class="btn fantasma" id="btn-exportar-csv" type="button" disabled>Exportar CSV</button>
+  </div>
+</div>
+<div class="card" id="r-resultado">Defina os filtros e clique em Gerar.</div>
+```
+
+- [ ] **Step 2: Colar `gerarRelatorio` (linhas 298-313, `supabase`→`sb`) e escrever o wiring (código completo)**
+
+```js
+/* ════════ relatórios ════════ */
+preencherSelect('r-convenio', OPCOES.convenio);
+preencherSelect('r-operacao', OPCOES.operacao);
+preencherSelect('r-motivo', OPCOES.motivo);
+preencherSelect('r-canal', OPCOES.canal);
+preencherSelect('r-status', ['Pendente','Em tratativa','Em aberto','Finalizado']);
+let relatorioLinhas = [];
+$('btn-gerar-relatorio').addEventListener('click', async ()=>{
+  const btn = $('btn-gerar-relatorio'); btn.disabled = true;
+  try {
+    relatorioLinhas = await gerarRelatorio({
+      dataInicio: val('r-de')||null, dataFim: val('r-ate')||null,
+      banco: val('r-banco')||null, convenio: val('r-convenio')||null,
+      operacao: val('r-operacao')||null, canal: val('r-canal')||null,
+      motivo: val('r-motivo')||null, status: val('r-status')||null,
+    });
+    $('btn-exportar-csv').disabled = !relatorioLinhas.length;
+    $('r-resultado').innerHTML = !relatorioLinhas.length ? 'Nenhum registro para os filtros.' :
+      `<p style="font-size:12px;color:var(--texto-sec);margin-bottom:10px"><b class="mono">${relatorioLinhas.length}</b> registros</p>` +
+      `<table class="tabela"><thead><tr><th>Cliente</th><th>Banco</th><th>Convênio</th><th>Motivo</th><th>Recebida</th><th>Status</th><th>Fonte</th></tr></thead><tbody>` +
+      relatorioLinhas.slice(0,500).map(l=>`<tr>
+        <td>${l.nome_cliente||'—'}</td><td>${l.banco||'—'}</td><td>${l.convenio||'—'}</td><td>${l.motivo||'—'}</td>
+        <td class="mono">${fmtData(l.data_recebimento)}</td><td>${l.status||'—'}</td>
+        <td><span class="pill ${l.fonte==='operacional'?'ok':'neutro'}">${l.fonte}</span></td></tr>`).join('') + '</tbody></table>';
+  } catch(e){ $('r-resultado').textContent = 'Erro: ' + e.message; }
+  finally { btn.disabled = false; }
+});
+$('btn-exportar-csv').addEventListener('click', ()=>{
+  const cab = ['nome_cliente','cpf','convenio','operacao','banco','ade','data_finalizacao_proposta','data_recebimento','data_resposta','motivo','status','canal','responsavel','nivel_risco','fonte'];
+  const csv = [cab.join(';')].concat(relatorioLinhas.map(l =>
+    cab.map(k => `"${String(l[k] ?? '').replace(/"/g,'""')}"`).join(';'))).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['﻿'+csv], {type:'text/csv;charset=utf-8'}));
+  a.download = 'relatorio-contestacoes.csv'; a.click();
+});
+```
+
+Nota: o filtro de banco na view usa `eq` (igualdade exata) — o input livre de banco deve casar com o valor gravado. Aceitável para o MVP; documentado.
+
+- [ ] **Step 3: Verificação integrada**
+
+Gerar sem filtros → todas as linhas (operacional + histórico se importado). Filtrar por status Finalizado → só finalizadas. Exportar CSV → abre no Excel com acentos corretos (BOM) e `;` como separador.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add konsi-contestacoes.html
+git commit -m "feat: relatórios com filtros sobre vw_contestacoes_consolidado + export CSV"
+```
+
+---
+
+## Fase 8 — Importação do histórico
+
+### Task 13: Upload .xlsx → RPC de importação + desfazer
+
+**Files:**
+- Modify: `konsi-contestacoes.html` (`#area-importacao` + script)
+- Reference: `cliente-supabase-exemplo.js:323-347` (`importarHistorico`, `desfazerImportacao`)
+
+- [ ] **Step 1: Markup dentro de `#area-importacao`**
+
+```html
+<div class="card" style="border:1.5px dashed var(--verde-borda);text-align:center;padding:34px">
+  <div style="font-size:34px">📄</div>
+  <div style="font-weight:700;margin-top:8px">Selecione a planilha Controle_de_Contestações.xlsx</div>
+  <div style="font-size:12px;color:var(--texto-sec);margin-top:4px">O cabeçalho real está na linha 4 — as 3 primeiras linhas são puladas automaticamente.</div>
+  <input type="file" id="imp-arquivo" accept=".xlsx" style="display:none">
+  <button class="btn" id="btn-escolher" type="button" style="margin-top:16px">Selecionar arquivo</button>
+</div>
+<div class="card" id="imp-resultado" style="margin-top:14px;display:none"></div>
+```
+
+- [ ] **Step 2: Colar `importarHistorico` e `desfazerImportacao` (linhas 323-347, `supabase`→`sb`) e escrever o parser (código completo)**
+
+```js
+/* ════════ importação ════════ */
+const MAPA_COLUNAS = {   // cabeçalho da planilha → chave esperada pela RPC
+  'Nome':'nome', 'CPF':'cpf', 'Convênio':'convenio', 'Operação':'operacao',
+  'Banco':'banco', 'ADE':'ade', 'Data de Finalização':'dataFinalizacao',
+  'Data de Recebimento':'dataRecebimento', 'Data da Resposta':'dataResposta',
+  'Motivo':'motivo', 'Status':'status', 'Protocolo':'protocolo', 'Canal':'canal',
+  'Responsável':'responsavel', 'Risco':'risco', 'Evidências':'evidencias',
+  'Lista de Restrição':'listaRestricao', 'Observação':'observacao',
+};
+function celula(v){
+  if(v instanceof Date) return v.toISOString().slice(0,10);
+  return String(v ?? '').trim();
+}
+$('btn-escolher').addEventListener('click', ()=> $('imp-arquivo').click());
+$('imp-arquivo').addEventListener('change', async (ev)=>{
+  const file = ev.target.files[0]; if(!file) return;
+  const res = $('imp-resultado'); res.style.display = 'block'; res.textContent = 'Lendo planilha…';
+  try {
+    const wb = XLSX.read(await file.arrayBuffer(), { cellDates:true });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const linhas = XLSX.utils.sheet_to_json(ws, { range:3, defval:'' }); // linha 4 = cabeçalho
+    const cabecalhos = Object.keys(linhas[0] || {});
+    const desconhecidos = cabecalhos.filter(h => !(h in MAPA_COLUNAS) && !h.startsWith('__EMPTY'));
+    const registros = linhas.map(l => {
+      const r = {};
+      for(const [col, chave] of Object.entries(MAPA_COLUNAS)) r[chave] = celula(l[col]);
+      return r;
+    }).filter(r => r.nome || r.cpf);
+    if(!registros.length) throw new Error('Nenhum registro reconhecido — confira os cabeçalhos: ' + cabecalhos.join(' | '));
+    res.textContent = `Importando ${registros.length} registros…`;
+    const r = await importarHistorico(registros);
+    res.innerHTML = `✅ <b>${r.total_importados}</b> importados de ${r.total_recebidos} ·
+      <b>${r.total_com_avisos}</b> com avisos de qualidade · lote <span class="mono">${r.lote_id}</span>
+      ${desconhecidos.length ? `<p style="color:var(--alerta);font-size:12px;margin-top:8px">Colunas ignoradas (sem mapeamento): ${desconhecidos.join(', ')}</p>` : ''}
+      <button class="btn fantasma" id="btn-desfazer" style="margin-top:12px;color:var(--erro)">Desfazer este lote</button>`;
+    $('btn-desfazer').addEventListener('click', async ()=>{
+      if(!confirm('Remover TODOS os registros deste lote?')) return;
+      const n = await desfazerImportacao(r.lote_id);
+      res.innerHTML = `Lote desfeito — ${n} registros removidos.`;
+    });
+  } catch(e){ res.textContent = 'Erro na importação: ' + (e.message || e); }
+  finally { ev.target.value = ''; }
+});
+```
+
+- [ ] **Step 3: Conferir os cabeçalhos reais da planilha e ajustar `MAPA_COLUNAS`**
+
+Antes do teste com o arquivo real, imprimir os cabeçalhos:
+
+```bash
+python - <<'EOF'
+import openpyxl
+wb = openpyxl.load_workbook(r"C:\caminho\para\Controle_de_Contestações.xlsx", read_only=True)
+ws = wb.active
+print([c.value for c in next(ws.iter_rows(min_row=4, max_row=4))])
+EOF
+```
+
+Se algum nome divergir do `MAPA_COLUNAS`, ajustar as CHAVES do mapa (lado esquerdo) para casar exatamente. Este passo é obrigatório — o mapa acima é a melhor hipótese, não fato verificado.
+
+- [ ] **Step 4: Verificação integrada**
+
+Importar o arquivo real (331 linhas) → resultado ~328 importados + avisos (a data ano "0206" vira aviso, não erro). Dashboard agora mostra cohort e tempo médio populados. Desfazer → `historico_importado` esvazia e log `IMPORTACAO_DESFEITA` gravado. Reimportar em seguida.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add konsi-contestacoes.html
+git commit -m "feat: importação do histórico .xlsx via RPC com desfazer por lote"
+```
+
+---
+
+## Fase 9 — Reset de senha, revisão final e deploy
+
+### Task 14: `redefinir-senha.html`
+
+**Files:**
+- Create: `redefinir-senha.html`
+
+- [ ] **Step 1: Criar o arquivo (código completo)**
+
+```html
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Konsi Jurídico — Redefinir senha</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Manrope',sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#03261F}
+.card{width:340px;background:#fff;border-radius:16px;padding:32px 28px}
+h1{font-size:17px;color:#04513F;margin-bottom:18px}
+label{display:block;font-size:11px;font-weight:700;color:#6B7280;text-transform:uppercase;margin-bottom:6px}
+input{width:100%;border:1px solid #E2EAE9;border-radius:8px;padding:10px 12px;font-family:inherit;font-size:14px;margin-bottom:14px}
+button{width:100%;background:#0A9F82;color:#fff;border:none;padding:12px;border-radius:8px;font-family:inherit;font-weight:700;font-size:14px;cursor:pointer}
+#msg{margin-top:12px;font-size:13px;text-align:center}
+</style>
+</head>
+<body>
+<form class="card" id="form">
+  <h1>Definir nova senha</h1>
+  <label>Nova senha</label><input type="password" id="s1" required minlength="8">
+  <label>Repita a senha</label><input type="password" id="s2" required minlength="8">
+  <button type="submit">Salvar nova senha</button>
+  <div id="msg"></div>
+</form>
+<script>
+const SUPABASE_URL = 'https://SEU_PROJECT_REF.supabase.co';       // mesma config do app
+const SUPABASE_ANON_KEY = 'SUA_CHAVE_ANON_AQUI';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+document.getElementById('form').addEventListener('submit', async (ev)=>{
+  ev.preventDefault();
+  const msg = document.getElementById('msg');
+  const s1 = document.getElementById('s1').value, s2 = document.getElementById('s2').value;
+  if(s1 !== s2){ msg.textContent = 'As senhas não conferem.'; msg.style.color = '#C0392B'; return; }
+  const { error } = await sb.auth.updateUser({ password: s1 });   // sessão vem do link do e-mail
+  if(error){ msg.textContent = 'Falha: ' + error.message + ' (abra pelo link do e-mail)'; msg.style.color = '#C0392B'; }
+  else { msg.innerHTML = 'Senha alterada! <a href="konsi-contestacoes.html">Ir para o login</a>'; msg.style.color = '#04513F'; }
+});
+</script>
+</body>
+</html>
+```
+
+- [ ] **Step 2: Preencher a CONFIG real, testar** — "Esqueci minha senha" no app → e-mail chega → link abre esta página → nova senha funciona no login.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add redefinir-senha.html
+git commit -m "feat: página de redefinição de senha via Supabase Auth"
+```
+
+### Task 15: Roteiro de verificação integrada completo (gate de release)
+
+- [ ] Executar o checklist do spec §13, ponta a ponta, num browser limpo (aba anônima):
+  1. Login/logout + sessão no reload.
+  2. Contestação completa pelas 6 etapas; conferir `etapa_atual`/`status`/`logs_auditoria` no Supabase a cada avanço.
+  3. Regra app Konsi bloqueia laudo sem confirmação (front E Edge Function).
+  4. Laudo gerado + editado + finalização + sync (se Google configurado).
+  5. Importação + desfazer + reimportar.
+  6. Dashboard e relatórios consistentes com os dados; CSV abre no Excel.
+  7. RLS: com sessão deslogada, `sb.from('contestacoes').select()` no console retorna lista vazia/erro (não dados).
+- [ ] Corrigir qualquer falha encontrada + commit por correção (`fix: …`).
+
+### Task 16: Publicar no GitHub Pages
+
+- [ ] **Step 1: Criar o repositório (público — requisito do Pages no plano free) e enviar**
+
+```bash
+cd /c/repos/konsi-juridico
+gh repo create konsi-juridico --public --source . --push
+```
+
+Nota: nenhum segredo vive no repo (anon key é pública por design; chaves secretas ficam nos secrets do Supabase).
+
+- [ ] **Step 2: Habilitar o Pages (branch main, raiz)**
+
+```bash
+gh api -X POST repos/{owner}/konsi-juridico/pages -f "source[branch]=main" -f "source[path]=/"
+```
+
+(Se a API recusar, habilitar manualmente em Settings → Pages → Deploy from branch → main / root.)
+
+- [ ] **Step 3: Smoke test em produção**
+
+Abrir `https://SEU_USUARIO.github.io/konsi-juridico/konsi-contestacoes.html` → login real → criar uma contestação de teste até a etapa 2 → salvar pendente → conferir no Supabase. Testar também o fluxo de recuperação de senha na URL pública (o `redirectTo` usa o origin real).
+
+- [ ] **Step 4: Commit final de docs**
+
+Atualizar `README.md` com a URL de produção e marcar o spec como "implementado".
+
+```bash
+git add README.md docs/
+git commit -m "docs: URL de produção + spec marcado como implementado"
+git push
+```
+
+---
+
+## Fora de escopo (fase 2 futura)
+
+- Auto-fill por IA (link Konsigleads + OCR de print/PDF) via nova Edge Function `extrair-dados`.
+- Realtime/subscriptions; paginação do histórico além de 300 linhas.
