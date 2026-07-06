@@ -9,10 +9,16 @@
 //   4. Adicionar uma linha na planilha de controle do Google Sheets
 //
 // POR QUE ISSO PRECISA SER UMA EDGE FUNCTION E NÃO RODAR NO NAVEGADOR:
-// Acessar a API do Google Drive/Sheets exige um "Service Account" do
-// Google com uma chave privada (arquivo .json com uma chave RSA). Essa
-// chave dá acesso de escrita à conta do Google Drive da Konsi — jamais
-// pode ficar visível no código do front-end público.
+// Acessar a API do Google Drive/Sheets exige credenciais OAuth2 (client
+// secret + refresh token) que dão acesso de escrita ao Drive da Konsi —
+// jamais podem ficar visíveis no código do front-end público.
+//
+// NOTA (06/07/2026): a autenticação usa OAuth2 com refresh token de um
+// usuário real, e NÃO Service Account, porque a política da organização
+// Google da Konsi (iam.managed.disableServiceAccountKeyCreation) bloqueia
+// a criação de chaves JSON de service account. O refresh token é obtido
+// uma única vez com o consentimento do usuário e fica guardado nos
+// secrets do Supabase.
 //
 // LEMBRETE IMPORTANTE: conforme decidido, o BANCO DE DADOS (Supabase) é
 // a fonte de verdade. Esta sincronização é "sob demanda" — ou seja, o
@@ -21,16 +27,38 @@
 // ============================================================================
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { GoogleAuth } from 'https://esm.sh/google-auth-library@9';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-// Credenciais do Service Account do Google, salvas como variável de
-// ambiente em formato JSON (ver README, seção "Configurar Google Service Account").
-const GOOGLE_SERVICE_ACCOUNT_JSON = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_JSON')!;
+// Credenciais OAuth2 do Google (client "Desktop" + refresh token do usuário
+// autorizado), salvas como secrets no Supabase — ver README.
+const GOOGLE_OAUTH_CLIENT_ID = Deno.env.get('GOOGLE_OAUTH_CLIENT_ID')!;
+const GOOGLE_OAUTH_CLIENT_SECRET = Deno.env.get('GOOGLE_OAUTH_CLIENT_SECRET')!;
+const GOOGLE_OAUTH_REFRESH_TOKEN = Deno.env.get('GOOGLE_OAUTH_REFRESH_TOKEN')!;
 const GOOGLE_SHEET_ID = Deno.env.get('GOOGLE_SHEET_ID')!;       // planilha de controle
 const GOOGLE_DRIVE_FOLDER_ID = Deno.env.get('GOOGLE_DRIVE_FOLDER_ID')!; // pasta raiz no Drive
+
+// Troca o refresh token (de longa duração) por um access token (~1h),
+// a cada execução. O refresh token só é invalidado se o usuário revogar
+// o acesso em https://myaccount.google.com/permissions.
+async function obterAccessTokenGoogle(): Promise<string> {
+  const resp = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: GOOGLE_OAUTH_CLIENT_ID,
+      client_secret: GOOGLE_OAUTH_CLIENT_SECRET,
+      refresh_token: GOOGLE_OAUTH_REFRESH_TOKEN,
+      grant_type: 'refresh_token',
+    }),
+  });
+  if (!resp.ok) {
+    throw new Error('Falha ao renovar access token Google: ' + (await resp.text()));
+  }
+  const data = await resp.json();
+  return data.access_token as string;
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -51,17 +79,8 @@ Deno.serve(async (req) => {
 
     if (error || !c) return jsonResponse({ erro: 'Contestação não encontrada' }, 404);
 
-    // ── Autentica com o Google usando o Service Account ─────────────────
-    const credentials = JSON.parse(GOOGLE_SERVICE_ACCOUNT_JSON);
-    const auth = new GoogleAuth({
-      credentials,
-      scopes: [
-        'https://www.googleapis.com/auth/drive',
-        'https://www.googleapis.com/auth/spreadsheets',
-      ],
-    });
-    const client = await auth.getClient();
-    const accessToken = (await client.getAccessToken()).token;
+    // ── Autentica com o Google via OAuth2 (refresh token → access token) ──
+    const accessToken = await obterAccessTokenGoogle();
 
     const resultado: Record<string, unknown> = {};
 
