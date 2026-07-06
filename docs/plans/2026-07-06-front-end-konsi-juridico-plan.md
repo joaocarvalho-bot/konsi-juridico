@@ -86,15 +86,9 @@ Esperado: commit criado com sql/, functions/, docs/, README.md, cliente-supabase
 
 > Nesta task os arquivos ainda estão em `functions/` — só são movidos para `supabase/functions/` na Task 3.
 
-- [ ] **Step 1: Corrigir coluna inexistente `c.observacao` no sync**
+**Step 1: ~~Corrigir coluna `c.observacao` no sync~~ (bug inexistente)**
 
-Em `functions/sync-drive-sheets/index.ts`, na montagem da linha do Sheets (~linha 137), trocar:
-
-```ts
-      c.nivel_risco, c.lista_restricao, c.observacao_interna,
-```
-
-(o código atual usa `c.observacao`, coluna que não existe em `contestacoes` — a célula sairia sempre vazia/undefined).
+Verificado na execução (06/07/2026): `sync-drive-sheets/index.ts` já usa `c.observacao_interna` corretamente — a alegação de bug era um falso positivo da auditoria inicial. Nenhuma mudança necessária.
 
 - [ ] **Step 2: Atualizar o modelo da IA no gerar-laudo**
 

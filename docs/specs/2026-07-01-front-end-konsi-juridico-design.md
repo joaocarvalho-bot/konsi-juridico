@@ -164,7 +164,6 @@ Sem framework (single-file). Verificação manual roteirizada:
 
 ## 14. Riscos / pontos de atenção
 
-- **Modelo Anthropic** nas Edge Functions está `claude-sonnet-4-20250514` (antigo). Sinalizar troca para modelo atual no plano (não é bloqueio do front).
-- **`sync-drive-sheets`** lê `c.observacao` mas a coluna é `observacao_interna` — provável bug no backend a confirmar (fora do escopo deste front, mas registrar).
+- **Modelo Anthropic** nas Edge Functions estava `claude-sonnet-4-20250514` — atualizado para `claude-sonnet-5` na Task 2.
 - Layout do stepper muda de 5 para 6 passos — ajustar o componente visual do legado.
 ```
