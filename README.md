@@ -1,6 +1,11 @@
-# Konsi Jurídico — Backend (Supabase)
+# Konsi Jurídico (Supabase + front single-file)
 
-Backend do sistema de gestão de contestações jurídicas da Konsi. Substitui o uso de planilhas Google Sheets como fonte de dados por um banco de dados relacional real, mantendo a exportação para Sheets/Drive como uma cópia sob demanda.
+Sistema de gestão de contestações jurídicas da Konsi. Substitui o uso de planilhas Google Sheets como fonte de dados por um banco de dados relacional real, mantendo a exportação para Sheets/Drive como uma cópia sob demanda.
+
+> **🟢 EM PRODUÇÃO:** https://joaocarvalho-bot.github.io/konsi-juridico/konsi-contestacoes.html
+> **Projeto Supabase:** `ymrqkppxchozpsztpmoq` (região São Paulo)
+> **Implementado em 07/07/2026** conforme `docs/plans/2026-07-06-front-end-konsi-juridico-plan.md` (spec: `docs/specs/`). Front-end: `konsi-contestacoes.html` (login → fluxo de 6 etapas com laudo por IA → histórico → dashboard → relatórios → importação) + `redefinir-senha.html`.
+> **Acesso:** e-mail + senha via Supabase Auth; primeira senha vem por "Esqueci minha senha". Segurança: RLS ativo em todas as tabelas + `security_invoker` nas views + `anon` sem acesso ao schema public.
 
 ---
 
