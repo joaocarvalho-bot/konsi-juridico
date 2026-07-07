@@ -519,6 +519,69 @@ async function gerarLaudo(contestacaoId) {
   return resultado.laudo;
 }
 
+/* ════════ dados: finalização + pendente + sync Google (de cliente-supabase-exemplo.js §3-4) ════════ */
+// Etapa 6: finalização — confirma envio e dispara sincronização Drive/Sheets
+async function finalizarContestacao(id, dados) {
+  if (!dados.envioConfirmado) {
+    throw new Error('Confirme o envio da resposta antes de finalizar.');
+  }
+
+  const { data, error } = await sb
+    .from('contestacoes')
+    .update({
+      protocolo_envio: dados.protocolo,
+      data_resposta: dados.dataResposta,
+      lista_restricao: dados.listaRestricao,
+      advogado_responsavel: dados.advogado,
+      envio_confirmado: true,
+      status: 'Finalizado',
+      etapa_atual: '6_finalizado',
+    })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw error;
+
+  await registrarLog('CONTESTACAO_FINALIZADA', `Finalizada: ${data.nome_cliente}`, id);
+
+  // Dispara a sincronização com Drive/Sheets (não bloqueia a UI —
+  // "sob demanda" conforme decidido, roda em background)
+  sincronizarComGoogle(id).catch(console.error);
+
+  return data;
+}
+
+// Salvar como pendente a qualquer momento do fluxo (sem exigir todas as etapas)
+async function salvarComoPendente(id, dadosParciais) {
+  const { data, error } = await sb
+    .from('contestacoes')
+    .update({ ...dadosParciais, status: 'Pendente' })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+async function sincronizarComGoogle(contestacaoId) {
+  const { data: sessao } = await sb.auth.getSession();
+
+  const resp = await fetch(`${SUPABASE_URL}/functions/v1/sync-drive-sheets`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${sessao.session.access_token}`,
+    },
+    body: JSON.stringify({ contestacaoId }),
+  });
+
+  const resultado = await resp.json();
+  if (!resp.ok) throw new Error(resultado.erro || 'Falha ao sincronizar com Google');
+  return resultado;
+}
+
 /* ════════ etapas: estado + opções ════════ */
 const OPCOES = {
   motivo:['NÃO RECONHECE','FRAUDE','CANCELAMENTO','DESACORDO COMERCIAL','SUPERENDIVIDAMENTO','REVISIONAL','EXIBICAO DOCUMENTO','VENDA CASADA','SEGREDO DE JUSTIÇA'],
@@ -601,11 +664,38 @@ async function avancar(){
         contestacaoAtual.laudo_texto = editado;
       }
     }
-    // etapa 6 é adicionada na Task 9
+    if(etapa===6){
+      await finalizarContestacao(contestacaoAtual.id, {
+        protocolo: val('e6-protocolo')||null, dataResposta: val('e6-data-resposta')||null,
+        listaRestricao: val('e6-lista-restricao')||null, advogado: val('e6-advogado')||null,
+        envioConfirmado: $('e6-envio-confirmado').checked,
+      });
+      toast('Contestação finalizada. Sincronização com Drive/Sheets disparada.');
+      novaContestacao();
+      showPage('historico');
+      return;
+    }
     if(etapa<6){ etapa++; renderStepper(); toast(`Etapa ${etapa-1} salva.`); }
   } catch(e){ toast(e.message || String(e), 'erro'); }
   finally { btn.disabled = false; }
 }
+function novaContestacao(){
+  contestacaoAtual = null; etapa = 1;
+  document.querySelectorAll('#area-etapas input, #area-etapas textarea, #area-etapas select').forEach(el=>{
+    if(el.type==='checkbox') el.checked = false; else el.value = '';
+  });
+  $('e1-data-recebimento').value = new Date().toISOString().slice(0,10);
+  renderStepper();
+}
+$('nav-nova').addEventListener('click', ()=>{ if(!contestacaoAtual) novaContestacao(); });
+$('btn-pendente').addEventListener('click', async ()=>{
+  if(!contestacaoAtual) return toast('Complete a etapa 1 primeiro.', 'erro');
+  try {
+    await salvarComoPendente(contestacaoAtual.id, {});
+    toast('Salvo como pendente. Retome pelo Histórico.');
+    novaContestacao(); showPage('historico');
+  } catch(e){ toast(e.message, 'erro'); }
+});
 </script>
 </body>
 </html>
