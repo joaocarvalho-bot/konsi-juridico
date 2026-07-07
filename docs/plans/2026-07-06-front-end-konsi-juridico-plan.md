@@ -1056,6 +1056,24 @@ $('btn-exportar-csv').addEventListener('click', ()=>{
 
 Nota: o filtro de banco na view usa `eq` (igualdade exata) — o input livre de banco deve casar com o valor gravado. Aceitável para o MVP; documentado.
 
+### Task 12.5: Hardening XSS nos renderizadores (adicionada em 07/07/2026)
+
+> Achado da revisão da Task 10 (severidade Importante): campos de texto livre (`nome_cliente`, `banco`, `motivo`, `convenio`, `chave` etc.) são interpolados sem escape em `innerHTML` no histórico (Task 10), dashboard (Task 11) e relatórios (Task 12). Risco: XSS armazenado — baixa probabilidade (só usuários autenticados escrevem), mas classe real.
+
+**Files:** Modify: `konsi-contestacoes.html`
+
+- [ ] **Step 1:** Adicionar helper junto aos demais (após `fmtData`):
+
+```js
+const esc = (v) => String(v ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+```
+
+- [ ] **Step 2:** Aplicar `esc(...)` a TODO valor dinâmico vindo do banco interpolado em template strings que alimentam `innerHTML`: `carregarHistorico` (nome_cliente, banco, motivo), `pillStatus` (s), `barras()` (`l[campoLabel]`), `carregarDashboard` (t.chave), relatórios (`nome_cliente, banco, convenio, motivo, status, fonte`). NÃO aplicar a valores numéricos/formatados por `fmtData` (seguros) nem a strings estáticas.
+
+- [ ] **Step 3:** Verificação: criar via console uma contestação com `nome_cliente` = `<img src=x onerror=alert(1)>xss` (via sb.from insert), abrir Histórico/Relatórios → o texto deve aparecer LITERAL, sem executar. Apagar o registro de teste via SQL direto depois.
+
+- [ ] **Step 4:** Commit `fix: escape de HTML em todos os renderizadores de dados dinâmicos (XSS)`.
+
 - [ ] **Step 3: Verificação integrada**
 
 Gerar sem filtros → todas as linhas (operacional + histórico se importado). Filtrar por status Finalizado → só finalizadas. Exportar CSV → abre no Excel com acentos corretos (BOM) e `;` como separador.
