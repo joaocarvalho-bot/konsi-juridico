@@ -747,6 +747,95 @@ function retomarContestacao(c){
   showPage('nova');
   toast(`Retomando: ${c.nome_cliente} (etapa ${etapa}).`);
 }
+
+/* ════════ dados: views do dashboard (de cliente-supabase-exemplo.js §5) ════════ */
+async function buscarKpisDashboard() {
+  const { data, error } = await sb.from('vw_dashboard_kpis').select('*').single();
+  if (error) throw error;
+  return data;
+}
+
+async function buscarRankingBancos() {
+  const { data, error } = await sb.from('vw_ranking_bancos').select('*');
+  if (error) throw error;
+  return data;
+}
+
+async function buscarRankingProdutos() {
+  const { data, error } = await sb.from('vw_ranking_produtos').select('*');
+  if (error) throw error;
+  return data;
+}
+
+async function buscarTempoMedioResumo() {
+  const { data, error } = await sb.from('vw_tempo_medio_resumo').select('*');
+  if (error) throw error;
+  return data;
+}
+
+async function buscarCohortMensal() {
+  const { data, error } = await sb.from('vw_cohort_mensal').select('*');
+  if (error) throw error;
+  return data;
+}
+
+async function buscarVolumeMensal() {
+  const { data, error } = await sb.from('vw_volume_mensal').select('*');
+  if (error) throw error;
+  return data;
+}
+
+/* ════════ dashboard ════════ */
+const FAIXAS_COHORT = ['0-30 dias','31-60 dias','61-90 dias','91-180 dias','181-365 dias','mais de 365 dias'];
+function barras(titulo, linhas, campoLabel, campoValor){
+  if(!linhas.length) return `<div class="card"><label class="lbl">${titulo}</label><p style="color:var(--texto-sec);font-size:13px">Sem dados.</p></div>`;
+  const max = Math.max(...linhas.map(l=>Number(l[campoValor])));
+  return `<div class="card"><label class="lbl">${titulo}</label>` + linhas.slice(0,8).map(l=>`
+    <div class="linha-barra"><div class="top"><span>${l[campoLabel]}</span>
+    <span class="mono" style="color:var(--texto-sec)">${l[campoValor]}</span></div>
+    <div class="barra-trilho"><div class="barra" style="width:${Math.round(Number(l[campoValor])/max*100)}%"></div></div></div>`).join('') + '</div>';
+}
+async function carregarDashboard(){
+  const area = $('area-dashboard');
+  area.textContent = 'Carregando…';
+  try {
+    const [kpis, bancos, produtos, tempos, cohort, volume] = await Promise.all([
+      buscarKpisDashboard(), buscarRankingBancos(), buscarRankingProdutos(),
+      buscarTempoMedioResumo(), buscarCohortMensal(), buscarVolumeMensal(),
+    ]);
+    const geral = tempos.find(t=>t.recorte==='geral') || {};
+    const meses = [...new Set(cohort.map(c=>c.mes_operacao))].sort();
+    const cohortHtml = !meses.length ? '<p style="color:var(--texto-sec);font-size:13px">Sem dados (importe o histórico).</p>' :
+      `<table class="tabela"><thead><tr><th>Mês da operação</th>${FAIXAS_COHORT.map(f=>`<th>${f}</th>`).join('')}</tr></thead><tbody>` +
+      meses.map(m=>{
+        const cels = FAIXAS_COHORT.map(f=>{
+          const r = cohort.find(c=>c.mes_operacao===m && c.faixa_dias===f);
+          return `<td class="mono">${r ? r.total_operacoes : '·'}</td>`;
+        }).join('');
+        return `<tr><td class="mono">${fmtData(m).slice(3)}</td>${cels}</tr>`;
+      }).join('') + '</tbody></table>';
+    area.innerHTML = `
+      <div class="grid-4" style="margin-bottom:18px">
+        <div class="kpi"><div class="num">${kpis.total_ativo_sistema}</div><div class="rotulo">No sistema</div></div>
+        <div class="kpi"><div class="num">${kpis.total_pendentes}</div><div class="rotulo">Pendentes</div></div>
+        <div class="kpi"><div class="num">${kpis.total_finalizadas_sistema}</div><div class="rotulo">Finalizadas</div></div>
+        <div class="kpi"><div class="num">${kpis.media_dias_geral ?? '—'}</div><div class="rotulo">Dias médios até contestação</div></div>
+      </div>
+      <div class="grid-2" style="margin-bottom:14px">
+        ${barras('Ranking de bancos', bancos, 'banco', 'total_contestacoes')}
+        ${barras('Ranking de produtos', produtos, 'produto', 'total_contestacoes')}
+      </div>
+      <div class="grid-2" style="margin-bottom:14px">
+        ${barras('Volume mensal (recebidas)', volume.slice(-8).map(v=>({mes:fmtData(v.mes).slice(3), total:v.total_contestacoes})), 'mes', 'total')}
+        <div class="card"><label class="lbl">Tempo até contestação</label>
+          <p style="font-size:13px;line-height:2">Mediana geral: <b class="mono">${geral.mediana_dias ?? '—'} dias</b> · Amostras: <b class="mono">${geral.total_amostras ?? 0}</b></p>
+          ${tempos.filter(t=>t.recorte==='banco').slice(0,5).map(t=>`<p style="font-size:12.5px;color:var(--texto-sec)">${t.chave}: <span class="mono">${t.media_dias} dias (méd.)</span></p>`).join('')}
+        </div>
+      </div>
+      <div class="card"><label class="lbl">Cohort mensal — mês da operação × dias até contestação</label>${cohortHtml}</div>
+      <p style="font-size:12px;color:var(--texto-sec);margin-top:10px">Total geral (com histórico): <b class="mono">${kpis.total_geral_com_historico}</b> · No mês atual: <b class="mono">${kpis.total_mes_atual}</b></p>`;
+  } catch(e){ area.textContent = 'Erro ao carregar dashboard: ' + e.message; }
+}
 </script>
 </body>
 </html>
