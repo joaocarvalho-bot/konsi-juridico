@@ -151,8 +151,8 @@ textarea.campo{min-height:84px;resize:vertical}
 
 <script>
 /* ════════ 0. CONFIG — preencher após Task 3 ════════ */
-const SUPABASE_URL = 'https://SEU_PROJECT_REF.supabase.co';
-const SUPABASE_ANON_KEY = 'SUA_CHAVE_ANON_AQUI';
+const SUPABASE_URL = 'https://ymrqkppxchozpsztpmoq.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InltcnFrcHB4Y2hvenBzenRwbW9xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMzNjgwNjAsImV4cCI6MjA5ODk0NDA2MH0.IXIH9gs49vwWv8lE2iMMA7Fdln2QOuxAbR95tT6r7zg';
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 /* ════════ helpers de UI ════════ */
@@ -180,6 +180,125 @@ function showPage(nome){
   if(nome==='historico' && typeof carregarHistorico==='function') carregarHistorico();
   if(nome==='dashboard' && typeof carregarDashboard==='function') carregarDashboard();
 }
+
+/* ════════ auth + logs (de cliente-supabase-exemplo.js §2 e §7) ════════ */
+
+async function fazerLogin(email, senha) {
+  const { data, error } = await sb.auth.signInWithPassword({
+    email,
+    password: senha,
+  });
+
+  if (error) {
+    throw new Error('E-mail ou senha incorretos.');
+  }
+
+  // Busca os dados complementares do perfil (nome, cargo)
+  const { data: perfil } = await sb
+    .from('usuarios_perfil')
+    .select('*')
+    .eq('id', data.user.id)
+    .single();
+
+  await registrarLog('LOGIN', `Login realizado por ${perfil.nome_completo}`);
+
+  return { usuario: data.user, perfil };
+}
+
+async function fazerLogout() {
+  const sessao = await sb.auth.getSession();
+  if (sessao.data.session) {
+    await registrarLog('LOGOUT', 'Logout manual');
+  }
+  await sb.auth.signOut();
+}
+
+// Verifica se já existe uma sessão ativa (ex: ao recarregar a página)
+async function verificarSessaoAtiva() {
+  const { data } = await sb.auth.getSession();
+  if (!data.session) return null;
+
+  const { data: perfil } = await sb
+    .from('usuarios_perfil')
+    .select('*')
+    .eq('id', data.session.user.id)
+    .single();
+
+  return { usuario: data.session.user, perfil };
+}
+
+// Recuperação de senha — dispara e-mail de verdade via Supabase Auth
+async function solicitarRecuperacaoSenha(email) {
+  const { error } = await sb.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.origin + window.location.pathname.replace('konsi-contestacoes.html', 'redefinir-senha.html'),
+  });
+  if (error) throw error;
+}
+
+async function registrarLog(acao, detalhe, contestacaoId = null) {
+  const { data: sessao } = await sb.auth.getSession();
+  if (!sessao.session) return; // sem sessão, não registra (ex: tentativa de login falha)
+
+  const { data: perfil } = await sb
+    .from('usuarios_perfil')
+    .select('nome_completo')
+    .eq('id', sessao.session.user.id)
+    .single();
+
+  await sb.from('logs_auditoria').insert({
+    usuario_id: sessao.session.user.id,
+    usuario_nome: perfil?.nome_completo,
+    acao,
+    detalhe,
+    contestacao_id: contestacaoId,
+    ip_user_agent: navigator.userAgent.slice(0, 200),
+  });
+}
+
+async function buscarLogsContestacao(contestacaoId) {
+  const { data, error } = await sb
+    .from('logs_auditoria')
+    .select('*')
+    .eq('contestacao_id', contestacaoId)
+    .order('criado_em', { ascending: false });
+
+  if (error) throw error;
+  return data;
+}
+
+/* ════════ auth: wiring ════════ */
+let perfilAtual = null;
+function iniciarApp(perfil){
+  perfilAtual = perfil;
+  $('tela-login').style.display = 'none';
+  $('app').classList.add('logado');
+  $('usuario-nome').textContent = perfil.nome_completo;
+  $('usuario-cargo').textContent = perfil.cargo;
+  $('usuario-iniciais').textContent = iniciais(perfil.nome_completo);
+  showPage('nova');
+}
+$('form-login').addEventListener('submit', async (ev)=>{
+  ev.preventDefault();
+  const btn = $('btn-entrar'); btn.disabled = true; btn.textContent = 'Entrando…';
+  try {
+    const { perfil } = await fazerLogin(val('login-email'), $('login-senha').value);
+    iniciarApp(perfil);
+  } catch(e){ toast(e.message, 'erro'); }
+  finally { btn.disabled = false; btn.textContent = 'Entrar'; }
+});
+$('link-esqueci').addEventListener('click', async ()=>{
+  const email = val('login-email');
+  if(!email) return toast('Preencha o e-mail primeiro.', 'erro');
+  try { await solicitarRecuperacaoSenha(email); toast('E-mail de recuperação enviado.'); }
+  catch(e){ toast('Falha: ' + e.message, 'erro'); }
+});
+$('btn-sair').addEventListener('click', async ()=>{
+  await fazerLogout();
+  location.reload();
+});
+window.addEventListener('DOMContentLoaded', async ()=>{
+  try { const s = await verificarSessaoAtiva(); if(s) iniciarApp(s.perfil); } catch(_){}
+});
 </script>
 </body>
 </html>
