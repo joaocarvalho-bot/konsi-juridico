@@ -262,3 +262,25 @@ select
   (select count(*) from contestacoes
      where date_trunc('month', data_recebimento) = date_trunc('month', current_date)
   ) as total_mes_atual;
+
+
+-- ----------------------------------------------------------------------------
+-- SEGURANÇA: security_invoker em TODAS as views
+-- ----------------------------------------------------------------------------
+-- Por padrão, views no Postgres executam com a permissão do DONO (postgres),
+-- o que CONTORNA o Row Level Security das tabelas por baixo — na prática,
+-- um visitante anônimo com a chave pública conseguia ler as contestações
+-- pelas views, mesmo com as tabelas blindadas. (Vazamento real encontrado e
+-- corrigido na verificação do gate em 07/07/2026.)
+-- Com security_invoker = true, a view executa com a permissão de QUEM
+-- consulta — o RLS das tabelas volta a valer em toda consulta via view.
+alter view vw_contestacoes_consolidado set (security_invoker = true);
+alter view vw_ranking_bancos           set (security_invoker = true);
+alter view vw_ranking_produtos         set (security_invoker = true);
+alter view vw_ranking_motivos          set (security_invoker = true);
+alter view vw_ranking_convenios        set (security_invoker = true);
+alter view vw_tempo_ate_contestacao    set (security_invoker = true);
+alter view vw_tempo_medio_resumo       set (security_invoker = true);
+alter view vw_cohort_mensal            set (security_invoker = true);
+alter view vw_volume_mensal            set (security_invoker = true);
+alter view vw_dashboard_kpis           set (security_invoker = true);

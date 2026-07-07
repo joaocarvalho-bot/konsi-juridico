@@ -156,3 +156,16 @@ create trigger trg_criar_perfil_usuario
   after insert on auth.users
   for each row
   execute function criar_perfil_usuario();
+
+
+-- ----------------------------------------------------------------------------
+-- SEGURANÇA: revogar acesso do papel "anon" ao schema public
+-- ----------------------------------------------------------------------------
+-- O sistema NUNCA consulta dados sem login (a chave anônima só serve para o
+-- endpoint de autenticação). Revogar o SELECT do anon é cinto-e-suspensório
+-- por cima do RLS + security_invoker: visitante sem login recebe 401 em
+-- qualquer tabela ou view, em vez de respostas vazias.
+-- (Adicionado na verificação do gate em 07/07/2026.)
+revoke all on all tables in schema public from anon;
+revoke usage on schema public from anon;
+alter default privileges in schema public revoke all on tables from anon;
