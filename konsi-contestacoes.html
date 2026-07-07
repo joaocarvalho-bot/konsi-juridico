@@ -266,6 +266,7 @@ function toast(msg, tipo='ok'){
   setTimeout(()=>el.remove(), 4200);
 }
 function fmtData(d){ if(!d) return '—'; const [a,m,dia]=String(d).slice(0,10).split('-'); return `${dia}/${m}/${a}`; }
+const esc = (v) => String(v ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 function iniciais(nome){ return nome.split(' ').filter(Boolean).map(p=>p[0]).slice(0,2).join('').toUpperCase(); }
 
 /* ════════ navegação ════════ */
@@ -718,7 +719,7 @@ $('btn-pendente').addEventListener('click', async ()=>{
 /* ════════ histórico ════════ */
 function pillStatus(s){
   const cls = s==='Finalizado' ? 'ok' : s==='Pendente' ? 'pend' : 'trat';
-  return `<span class="pill ${cls}">${s}</span>`;
+  return `<span class="pill ${cls}">${esc(s)}</span>`;
 }
 async function carregarHistorico(){
   const area = $('area-historico');
@@ -731,7 +732,7 @@ async function carregarHistorico(){
     <th>Cliente</th><th>Banco</th><th>Motivo</th><th>Recebida</th><th>Etapa</th><th>Status</th>
   </tr></thead><tbody>` + data.map(c=>`
     <tr data-id="${c.id}">
-      <td>${c.nome_cliente}</td><td>${c.banco||'—'}</td><td>${c.motivo||'—'}</td>
+      <td>${esc(c.nome_cliente)}</td><td>${esc(c.banco||'—')}</td><td>${esc(c.motivo||'—')}</td>
       <td class="mono">${fmtData(c.data_recebimento)}</td>
       <td class="mono" style="color:var(--texto-sec)">${c.etapa_atual[0]}/6</td>
       <td>${pillStatus(c.status)}</td>
@@ -809,7 +810,7 @@ function barras(titulo, linhas, campoLabel, campoValor){
   if(!linhas.length) return `<div class="card"><label class="lbl">${titulo}</label><p style="color:var(--texto-sec);font-size:13px">Sem dados.</p></div>`;
   const max = Math.max(...linhas.map(l=>Number(l[campoValor])));
   return `<div class="card"><label class="lbl">${titulo}</label>` + linhas.slice(0,8).map(l=>`
-    <div class="linha-barra"><div class="top"><span>${l[campoLabel]}</span>
+    <div class="linha-barra"><div class="top"><span>${esc(l[campoLabel])}</span>
     <span class="mono" style="color:var(--texto-sec)">${l[campoValor]}</span></div>
     <div class="barra-trilho"><div class="barra" style="width:${Math.round(Number(l[campoValor])/max*100)}%"></div></div></div>`).join('') + '</div>';
 }
@@ -847,7 +848,7 @@ async function carregarDashboard(){
         ${barras('Volume mensal (recebidas)', volume.slice(-8).map(v=>({mes:fmtData(v.mes).slice(3), total:v.total_contestacoes})), 'mes', 'total')}
         <div class="card"><label class="lbl">Tempo até contestação</label>
           <p style="font-size:13px;line-height:2">Mediana geral: <b class="mono">${geral.mediana_dias ?? '—'} dias</b> · Amostras: <b class="mono">${geral.total_amostras ?? 0}</b></p>
-          ${tempos.filter(t=>t.recorte==='banco').slice(0,5).map(t=>`<p style="font-size:12.5px;color:var(--texto-sec)">${t.chave}: <span class="mono">${t.media_dias} dias (méd.)</span></p>`).join('')}
+          ${tempos.filter(t=>t.recorte==='banco').slice(0,5).map(t=>`<p style="font-size:12.5px;color:var(--texto-sec)">${esc(t.chave)}: <span class="mono">${t.media_dias} dias (méd.)</span></p>`).join('')}
         </div>
       </div>
       <div class="card"><label class="lbl">Cohort mensal — mês da operação × dias até contestação</label>${cohortHtml}</div>
@@ -894,16 +895,16 @@ $('btn-gerar-relatorio').addEventListener('click', async ()=>{
       `<p style="font-size:12px;color:var(--texto-sec);margin-bottom:10px"><b class="mono">${relatorioLinhas.length}</b> registros</p>` +
       `<table class="tabela"><thead><tr><th>Cliente</th><th>Banco</th><th>Convênio</th><th>Motivo</th><th>Recebida</th><th>Status</th><th>Fonte</th></tr></thead><tbody>` +
       relatorioLinhas.slice(0,500).map(l=>`<tr>
-        <td>${l.nome_cliente||'—'}</td><td>${l.banco||'—'}</td><td>${l.convenio||'—'}</td><td>${l.motivo||'—'}</td>
-        <td class="mono">${fmtData(l.data_recebimento)}</td><td>${l.status||'—'}</td>
-        <td><span class="pill ${l.fonte==='operacional'?'ok':'neutro'}">${l.fonte}</span></td></tr>`).join('') + '</tbody></table>';
+        <td>${esc(l.nome_cliente||'—')}</td><td>${esc(l.banco||'—')}</td><td>${esc(l.convenio||'—')}</td><td>${esc(l.motivo||'—')}</td>
+        <td class="mono">${fmtData(l.data_recebimento)}</td><td>${esc(l.status||'—')}</td>
+        <td><span class="pill ${l.fonte==='operacional'?'ok':'neutro'}">${esc(l.fonte)}</span></td></tr>`).join('') + '</tbody></table>';
   } catch(e){ $('r-resultado').textContent = 'Erro: ' + e.message; }
   finally { btn.disabled = false; }
 });
 $('btn-exportar-csv').addEventListener('click', ()=>{
   const cab = ['nome_cliente','cpf','convenio','operacao','banco','ade','data_finalizacao_proposta','data_recebimento','data_resposta','motivo','status','canal','responsavel','nivel_risco','fonte'];
   const csv = [cab.join(';')].concat(relatorioLinhas.map(l =>
-    cab.map(k => `"${String(l[k] ?? '').replace(/"/g,'""')}"`).join(';'))).join('\n');
+    cab.map(k => { let v = String(l[k] ?? ''); if(/^[=+\-@]/.test(v)) v = "'" + v; return `"${v.replace(/"/g,'""')}"`; }).join(';'))).join('\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob(['﻿'+csv], {type:'text/csv;charset=utf-8'}));
   a.download = 'relatorio-contestacoes.csv'; a.click();
