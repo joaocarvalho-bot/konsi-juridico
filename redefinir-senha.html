@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Konsi Jurídico — Redefinir senha</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Manrope',sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#03261F}
+.card{width:340px;background:#fff;border-radius:16px;padding:32px 28px}
+h1{font-size:17px;color:#04513F;margin-bottom:18px}
+label{display:block;font-size:11px;font-weight:700;color:#6B7280;text-transform:uppercase;margin-bottom:6px}
+input{width:100%;border:1px solid #E2EAE9;border-radius:8px;padding:10px 12px;font-family:inherit;font-size:14px;margin-bottom:14px}
+button{width:100%;background:#0A9F82;color:#fff;border:none;padding:12px;border-radius:8px;font-family:inherit;font-weight:700;font-size:14px;cursor:pointer}
+#msg{margin-top:12px;font-size:13px;text-align:center}
+</style>
+</head>
+<body>
+<form class="card" id="form">
+  <h1>Definir nova senha</h1>
+  <label>Nova senha</label><input type="password" id="s1" required minlength="8">
+  <label>Repita a senha</label><input type="password" id="s2" required minlength="8">
+  <button type="submit">Salvar nova senha</button>
+  <div id="msg"></div>
+</form>
+<script>
+const SUPABASE_URL = 'https://ymrqkppxchozpsztpmoq.supabase.co';       // mesma config do app
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InltcnFrcHB4Y2hvenBzenRwbW9xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMzNjgwNjAsImV4cCI6MjA5ODk0NDA2MH0.IXIH9gs49vwWv8lE2iMMA7Fdln2QOuxAbR95tT6r7zg';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+document.getElementById('form').addEventListener('submit', async (ev)=>{
+  ev.preventDefault();
+  const msg = document.getElementById('msg');
+  const s1 = document.getElementById('s1').value, s2 = document.getElementById('s2').value;
+  if(s1 !== s2){ msg.textContent = 'As senhas não conferem.'; msg.style.color = '#C0392B'; return; }
+  const { error } = await sb.auth.updateUser({ password: s1 });   // sessão vem do link do e-mail
+  if(error){ msg.textContent = 'Falha: ' + error.message + ' (abra pelo link do e-mail)'; msg.style.color = '#C0392B'; }
+  else { msg.innerHTML = 'Senha alterada! <a href="konsi-contestacoes.html">Ir para o login</a>'; msg.style.color = '#04513F'; }
+});
+</script>
+</body>
+</html>
