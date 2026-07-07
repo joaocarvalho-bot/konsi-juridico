@@ -138,7 +138,88 @@ textarea.campo{min-height:84px;resize:vertical}
       </div>
     </header>
     <main class="conteudo">
-      <section class="page ativa" id="page-nova"><h1 class="titulo">Nova contestação</h1><p class="subtitulo">Fluxo em 6 etapas — do recebimento da notificação à finalização.</p><div id="area-etapas"></div></section>
+      <section class="page ativa" id="page-nova"><h1 class="titulo">Nova contestação</h1><p class="subtitulo">Fluxo em 6 etapas — do recebimento da notificação à finalização.</p><div id="area-etapas">
+  <div class="stepper" id="stepper"></div>
+
+  <fieldset class="etapa ativa" id="etapa-1">
+    <div class="grid-2">
+      <div><label class="lbl">Nome do cliente *</label><input class="campo" id="e1-nome"></div>
+      <div><label class="lbl">CPF *</label><input class="campo" id="e1-cpf" placeholder="000.000.000-00" maxlength="14"></div>
+      <div><label class="lbl">ADE / contrato</label><input class="campo" id="e1-ade"></div>
+      <div><label class="lbl">Banco</label><input class="campo" id="e1-banco"></div>
+      <div><label class="lbl">Motivo</label><select class="campo" id="e1-motivo"></select></div>
+      <div><label class="lbl">Canal</label><select class="campo" id="e1-canal"></select></div>
+      <div><label class="lbl">Data de recebimento</label><input class="campo" id="e1-data-recebimento" type="date"></div>
+    </div>
+    <p style="font-size:12px;color:var(--texto-sec);margin-top:10px">ℹ️ O nome é gravado em MAIÚSCULO automaticamente pelo banco de dados.</p>
+  </fieldset>
+
+  <fieldset class="etapa" id="etapa-2">
+    <div class="grid-2">
+      <div><label class="lbl">Convênio</label><select class="campo" id="e2-convenio"></select></div>
+      <div><label class="lbl">Operação</label><select class="campo" id="e2-operacao"></select></div>
+      <div><label class="lbl">Valor liberado (R$)</label><input class="campo" id="e2-valor" inputmode="decimal"></div>
+      <div><label class="lbl">Valor da parcela (R$)</label><input class="campo" id="e2-parcela" inputmode="decimal"></div>
+      <div><label class="lbl">Qtd. parcelas</label><input class="campo" id="e2-qtd" type="number" min="1"></div>
+      <div><label class="lbl">Data da operação</label><input class="campo" id="e2-data-finalizacao" type="date"></div>
+      <div><label class="lbl">Nº processo judicial</label><input class="campo" id="e2-processo"></div>
+      <div><label class="lbl">Responsável</label><select class="campo" id="e2-responsavel"></select></div>
+      <div><label class="lbl">Nível de risco</label><select class="campo" id="e2-risco"></select></div>
+    </div>
+    <div style="margin-top:14px"><label class="lbl">Descrição dos fatos</label><textarea class="campo" id="e2-fatos"></textarea></div>
+    <div style="margin-top:14px"><label class="lbl">Observação interna</label><textarea class="campo" id="e2-obs"></textarea></div>
+  </fieldset>
+
+  <fieldset class="etapa" id="etapa-3">
+    <div class="grid-2">
+      <div><label class="lbl">Situação das evidências</label><select class="campo" id="e3-evidencias"></select></div>
+      <div><label class="lbl">Link do arquivo de evidência (Drive)</label><input class="campo" id="e3-arquivo-url" placeholder="https://drive.google.com/…"></div>
+      <div><label class="lbl">Conversas no Hyperflow?</label><select class="campo" id="e3-hyperflow"><option value="">—</option><option value="true">Sim</option><option value="false">Não</option></select></div>
+    </div>
+    <div class="aviso-app">
+      <label style="display:flex;align-items:center;gap:10px;font-weight:700;color:var(--verde-escuro);cursor:pointer">
+        <input type="checkbox" id="e3-via-app" style="width:16px;height:16px;accent-color:#0A9F82"> Operação via app Konsi
+      </label>
+      <label style="display:flex;align-items:center;gap:10px;font-size:13px;margin-top:10px;cursor:pointer">
+        <input type="checkbox" id="e3-procedimento" style="width:16px;height:16px;accent-color:#0A9F82">
+        Confirmo que o procedimento de utilização do app será anexado ao laudo <span style="color:var(--erro);font-weight:700">*obrigatório se via app</span>
+      </label>
+    </div>
+  </fieldset>
+
+  <fieldset class="etapa" id="etapa-4">
+    <div class="card"><div class="mono" style="font-size:11px;color:var(--texto-sec);margin-bottom:10px">PRÉVIA — projeção sem IA</div>
+    <div id="previa-texto" style="font-size:13px;line-height:1.8;white-space:pre-wrap">—</div></div>
+  </fieldset>
+
+  <fieldset class="etapa" id="etapa-5">
+    <div style="display:flex;gap:10px;margin-bottom:14px">
+      <button class="btn" id="btn-gerar-laudo" type="button">✦ Elaborar laudo com IA</button>
+    </div>
+    <label class="lbl">Laudo (editável)</label>
+    <textarea class="campo" id="laudo-texto" style="min-height:260px"></textarea>
+  </fieldset>
+
+  <fieldset class="etapa" id="etapa-6">
+    <div class="grid-2">
+      <div><label class="lbl">Protocolo de envio</label><input class="campo" id="e6-protocolo"></div>
+      <div><label class="lbl">Data da resposta</label><input class="campo" id="e6-data-resposta" type="date"></div>
+      <div><label class="lbl">Advogado responsável</label><input class="campo" id="e6-advogado"></div>
+      <div><label class="lbl">Lista de restrição</label><input class="campo" id="e6-lista-restricao"></div>
+    </div>
+    <label style="display:flex;align-items:center;gap:10px;font-weight:700;margin-top:16px;cursor:pointer">
+      <input type="checkbox" id="e6-envio-confirmado" style="width:16px;height:16px;accent-color:#0A9F82"> Confirmo o envio da resposta
+    </label>
+  </fieldset>
+
+  <div style="display:flex;justify-content:space-between;margin-top:22px">
+    <button class="btn fantasma" id="btn-anterior" type="button">‹ Anterior</button>
+    <div style="display:flex;gap:10px">
+      <button class="btn fantasma" id="btn-pendente" type="button">Salvar como pendente</button>
+      <button class="btn" id="btn-proxima" type="button">Próxima ›</button>
+    </div>
+  </div>
+</div></section>
       <section class="page" id="page-historico"><h1 class="titulo">Histórico</h1><p class="subtitulo">Contestações registradas no sistema. Clique numa linha para retomar.</p><div id="area-historico" class="card">Carregando…</div></section>
       <section class="page" id="page-dashboard"><h1 class="titulo">Dashboard</h1><p class="subtitulo">Indicadores operacionais + histórico consolidado.</p><div id="area-dashboard">Carregando…</div></section>
       <section class="page" id="page-relatorios"><h1 class="titulo">Relatórios</h1><p class="subtitulo">Consulta filtrada sobre operacional + histórico.</p><div id="area-relatorios"></div></section>
@@ -299,6 +380,95 @@ $('btn-sair').addEventListener('click', async ()=>{
 window.addEventListener('DOMContentLoaded', async ()=>{
   try { const s = await verificarSessaoAtiva(); if(s) iniciarApp(s.perfil); } catch(_){}
 });
+
+/* ════════ dados: etapa 1 (de cliente-supabase-exemplo.js §3) ════════ */
+async function criarContestacaoEtapa1(dados) {
+  const { data, error } = await sb
+    .from('contestacoes')
+    .insert({
+      nome_cliente: dados.nome,        // o banco já converte para MAIÚSCULO via trigger
+      cpf: dados.cpf,
+      ade: dados.ade,
+      banco: dados.banco,
+      motivo: dados.motivo,
+      canal: dados.canal,
+      data_recebimento: dados.dataRecebimento,
+      etapa_atual: '1_recepcao',
+      origem_registro: dados.origem || 'manual', // 'manual' | 'extensao_chrome'
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+
+  await registrarLog('CONTESTACAO_CRIADA', `Nova contestação: ${data.nome_cliente}`, data.id);
+  return data;
+}
+
+/* ════════ etapas: estado + opções ════════ */
+const OPCOES = {
+  motivo:['NÃO RECONHECE','FRAUDE','CANCELAMENTO','DESACORDO COMERCIAL','SUPERENDIVIDAMENTO','REVISIONAL','EXIBICAO DOCUMENTO','VENDA CASADA','SEGREDO DE JUSTIÇA'],
+  canal:['Judicial','SAC Banco','E-mail','BACEN','Procon','Reclame Aqui','Consumidor.gov','Sistema Contest'],
+  responsavel:['Konsi','Banco','SEGREDO DE JUSTIÇA'],
+  risco:['Baixo','Médio','Alto','SEGREDO DE JUSTIÇA'],
+  evidencias:['Com evidências','Sem evidências','Dispensa evidência','A definir'],
+  convenio:['INSS','GOV BA','GOV SP'],
+  operacao:['Novo','Portabilidade','Refinanciamento','Cartão RMC','Cartão RCC'],  // validar lista com o jurídico
+};
+function preencherSelect(id, lista){ $(id).innerHTML = '<option value="">—</option>' + lista.map(o=>`<option>${o}</option>`).join(''); }
+preencherSelect('e1-motivo', OPCOES.motivo);   preencherSelect('e1-canal', OPCOES.canal);
+preencherSelect('e2-convenio', OPCOES.convenio); preencherSelect('e2-operacao', OPCOES.operacao);
+preencherSelect('e2-responsavel', OPCOES.responsavel); preencherSelect('e2-risco', OPCOES.risco);
+preencherSelect('e3-evidencias', OPCOES.evidencias);
+$('e1-data-recebimento').value = new Date().toISOString().slice(0,10);
+$('e1-cpf').addEventListener('input', (e)=>{                       // máscara CPF
+  let v = e.target.value.replace(/\D/g,'').slice(0,11);
+  e.target.value = v.replace(/(\d{3})(\d)/,'$1.$2').replace(/(\d{3})(\d)/,'$1.$2').replace(/(\d{3})(\d{1,2})$/,'$1-$2');
+});
+
+const NOMES_ETAPAS = ['Recepção','Operação','Subsídios','Prévia','Elaboração','Finalização'];
+let contestacaoAtual = null;
+let etapa = 1;
+function renderStepper(){
+  $('stepper').innerHTML = NOMES_ETAPAS.map((n,i)=>{
+    const k = i+1, cls = k===etapa ? 'ativa' : (k<etapa ? 'feita' : '');
+    return `<div class="step ${cls}"><b>${k<etapa?'✓':k}</b>${n}</div>`;
+  }).join('');
+  for(let i=1;i<=6;i++) $('etapa-'+i).classList.toggle('ativa', i===etapa);
+  $('btn-anterior').style.visibility = etapa===1 ? 'hidden' : 'visible';
+  $('btn-proxima').textContent = etapa===6 ? '✓ Finalizar contestação' : 'Próxima ›';
+}
+renderStepper();
+
+/* etapa 1 → cria o registro */
+const RE_CPF = /^\d{3}\.?\d{3}\.?\d{3}-?\d{2}$/;
+async function salvarEtapa1(){
+  if(!val('e1-nome')) throw new Error('Nome é obrigatório.');
+  if(!RE_CPF.test(val('e1-cpf'))) throw new Error('CPF inválido.');
+  const dados = { nome: val('e1-nome'), cpf: val('e1-cpf'), ade: val('e1-ade')||null,
+    banco: val('e1-banco')||null, motivo: val('e1-motivo')||null, canal: val('e1-canal')||null,
+    dataRecebimento: val('e1-data-recebimento')||null };
+  if(!contestacaoAtual){ contestacaoAtual = await criarContestacaoEtapa1(dados); }
+  else {
+    const { data, error } = await sb.from('contestacoes').update({
+      nome_cliente: dados.nome, cpf: dados.cpf, ade: dados.ade, banco: dados.banco,
+      motivo: dados.motivo, canal: dados.canal, data_recebimento: dados.dataRecebimento
+    }).eq('id', contestacaoAtual.id).select().single();
+    if(error) throw error; contestacaoAtual = data;
+  }
+}
+
+$('btn-anterior').addEventListener('click', ()=>{ if(etapa>1){ etapa--; renderStepper(); } });
+$('btn-proxima').addEventListener('click', avancar);
+async function avancar(){
+  const btn = $('btn-proxima'); btn.disabled = true;
+  try {
+    if(etapa===1) await salvarEtapa1();
+    // etapas 2,3,5,6 são adicionadas nas Tasks 7–9
+    if(etapa<6){ etapa++; renderStepper(); toast(`Etapa ${etapa-1} salva.`); }
+  } catch(e){ toast(e.message || String(e), 'erro'); }
+  finally { btn.disabled = false; }
+}
 </script>
 </body>
 </html>
