@@ -123,7 +123,7 @@ Tom: formal, técnico-jurídico, objetivo.`;
       },
       body: JSON.stringify({
         model: 'claude-sonnet-5',
-        max_tokens: 2500,
+        max_tokens: 8000,
         messages: [{ role: 'user', content: prompt }],
       }),
     });
@@ -134,6 +134,11 @@ Tom: formal, técnico-jurídico, objetivo.`;
     }
 
     const anthropicData = await anthropicResp.json();
+    // Truncamento silencioso é pior que erro: se o modelo parou por limite de
+    // tokens, o laudo está incompleto — devolve erro em vez de salvar pela metade.
+    if (anthropicData.stop_reason === 'max_tokens') {
+      return jsonResponse({ erro: 'Laudo truncado pelo limite de tokens — tente gerar novamente.' }, 502);
+    }
     const laudo = anthropicData.content?.find((b: any) => b.type === 'text')?.text || '';
 
     // ── Salva o laudo gerado de volta na contestação ─────────────────────
