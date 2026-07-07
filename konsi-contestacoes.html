@@ -405,6 +405,84 @@ async function criarContestacaoEtapa1(dados) {
   return data;
 }
 
+/* ════════ dados: etapas 2 e 3 (de cliente-supabase-exemplo.js §3) ════════ */
+// Etapa 2: completa os dados da operação (essenciais para o laudo)
+async function atualizarContestacaoEtapa2(id, dados) {
+  const { data, error } = await sb
+    .from('contestacoes')
+    .update({
+      convenio: dados.convenio,
+      operacao: dados.operacao,
+      valor_liberado: dados.valorLiberado,
+      valor_parcela: dados.valorParcela,
+      qtd_parcelas: dados.qtdParcelas,
+      data_finalizacao_proposta: dados.dataFinalizacao,
+      numero_processo_judicial: dados.processo,
+      responsavel: dados.responsavel,
+      nivel_risco: dados.risco,
+      descricao_fatos: dados.fatos,
+      observacao_interna: dados.observacao,
+      etapa_atual: '2_operacao',
+    })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+// Etapa 3: subsídios — evidências, Hyperflow, procedimento do app
+async function atualizarContestacaoEtapa3(id, dados) {
+  // Validação de regra de negócio no próprio front (a Edge Function
+  // gerar-laudo também valida, como segunda camada de proteção)
+  if (dados.operacaoViaApp && !dados.procedimentoAppConfirmado) {
+    throw new Error(
+      'Operação via app Konsi: é obrigatório confirmar o procedimento de utilização do aplicativo.'
+    );
+  }
+  if (dados.situacaoEvidencias === 'Com evidências' && !dados.arquivoEvidenciaUrl) {
+    throw new Error('Marcado "Com evidências": é necessário anexar o arquivo.');
+  }
+
+  const { data, error } = await sb
+    .from('contestacoes')
+    .update({
+      situacao_evidencias: dados.situacaoEvidencias,
+      arquivo_evidencia_url: dados.arquivoEvidenciaUrl,
+      tem_conversas_hyperflow: dados.temConversasHyperflow,
+      operacao_via_app: dados.operacaoViaApp,
+      procedimento_app_confirmado: dados.procedimentoAppConfirmado,
+      etapa_atual: '3_subsidios',
+    })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+async function salvarEtapa2(){
+  contestacaoAtual = await atualizarContestacaoEtapa2(contestacaoAtual.id, {
+    convenio: val('e2-convenio')||null, operacao: val('e2-operacao')||null,
+    valorLiberado: num('e2-valor'), valorParcela: num('e2-parcela'),
+    qtdParcelas: val('e2-qtd') ? Number(val('e2-qtd')) : null,
+    dataFinalizacao: val('e2-data-finalizacao')||null, processo: val('e2-processo')||null,
+    responsavel: val('e2-responsavel')||null, risco: val('e2-risco')||null,
+    fatos: val('e2-fatos')||null, observacao: val('e2-obs')||null,
+  });
+}
+async function salvarEtapa3(){
+  contestacaoAtual = await atualizarContestacaoEtapa3(contestacaoAtual.id, {
+    situacaoEvidencias: val('e3-evidencias')||null,
+    arquivoEvidenciaUrl: val('e3-arquivo-url')||null,
+    temConversasHyperflow: val('e3-hyperflow')==='' ? null : val('e3-hyperflow')==='true',
+    operacaoViaApp: $('e3-via-app').checked,
+    procedimentoAppConfirmado: $('e3-procedimento').checked,
+  });
+}
+
 /* ════════ etapas: estado + opções ════════ */
 const OPCOES = {
   motivo:['NÃO RECONHECE','FRAUDE','CANCELAMENTO','DESACORDO COMERCIAL','SUPERENDIVIDAMENTO','REVISIONAL','EXIBICAO DOCUMENTO','VENDA CASADA','SEGREDO DE JUSTIÇA'],
@@ -464,7 +542,10 @@ async function avancar(){
   const btn = $('btn-proxima'); btn.disabled = true;
   try {
     if(etapa===1) await salvarEtapa1();
-    // etapas 2,3,5,6 são adicionadas nas Tasks 7–9
+    if(etapa===2) await salvarEtapa2();
+    if(etapa===3) await salvarEtapa3();
+    if(etapa===3 && typeof montarPrevia==='function') montarPrevia();   // etapa 4; função criada na Task 8
+    // etapas 5,6 são adicionadas nas Tasks 8–9
     if(etapa<6){ etapa++; renderStepper(); toast(`Etapa ${etapa-1} salva.`); }
   } catch(e){ toast(e.message || String(e), 'erro'); }
   finally { btn.disabled = false; }
