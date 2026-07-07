@@ -483,6 +483,42 @@ async function salvarEtapa3(){
   });
 }
 
+function montarPrevia(){
+  const c = contestacaoAtual;
+  $('previa-texto').textContent =
+`IDENTIFICAÇÃO DA OPERAÇÃO
+Cliente: ${c.nome_cliente} — CPF ${c.cpf}
+Convênio: ${c.convenio||'—'} · Banco: ${c.banco||'—'} · ADE: ${c.ade||'—'}
+Operação: ${c.operacao||'—'}${c.valor_liberado ? ' · Valor liberado: R$ '+Number(c.valor_liberado).toLocaleString('pt-BR',{minimumFractionDigits:2}) : ''}
+
+DESCRIÇÃO DOS FATOS ALEGADOS
+Motivo: ${c.motivo||'—'} · Canal: ${c.canal||'—'}
+${c.descricao_fatos || 'A parte alega desconhecimento da contratação.'}
+
+SUBSÍDIOS
+Evidências: ${c.situacao_evidencias||'—'} · Hyperflow: ${c.tem_conversas_hyperflow===true?'SIM':c.tem_conversas_hyperflow===false?'NÃO':'—'} · Via app Konsi: ${c.operacao_via_app?'SIM':'NÃO'}
+
+(Prévia para conferência. O laudo completo é elaborado na próxima etapa, com IA.)`;
+}
+
+/* ════════ dados: laudo via Edge Function (de cliente-supabase-exemplo.js §3) ════════ */
+async function gerarLaudo(contestacaoId) {
+  const { data: sessao } = await sb.auth.getSession();
+
+  const resp = await fetch(`${SUPABASE_URL}/functions/v1/gerar-laudo`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${sessao.session.access_token}`,
+    },
+    body: JSON.stringify({ contestacaoId }),
+  });
+
+  const resultado = await resp.json();
+  if (!resp.ok) throw new Error(resultado.erro || 'Falha ao gerar laudo');
+  return resultado.laudo;
+}
+
 /* ════════ etapas: estado + opções ════════ */
 const OPCOES = {
   motivo:['NÃO RECONHECE','FRAUDE','CANCELAMENTO','DESACORDO COMERCIAL','SUPERENDIVIDAMENTO','REVISIONAL','EXIBICAO DOCUMENTO','VENDA CASADA','SEGREDO DE JUSTIÇA'],
@@ -538,6 +574,17 @@ async function salvarEtapa1(){
 
 $('btn-anterior').addEventListener('click', ()=>{ if(etapa>1){ etapa--; renderStepper(); } });
 $('btn-proxima').addEventListener('click', avancar);
+$('btn-gerar-laudo').addEventListener('click', async ()=>{
+  const btn = $('btn-gerar-laudo');
+  btn.disabled = true; btn.textContent = 'Gerando… (30-60s)';
+  try {
+    const laudo = await gerarLaudo(contestacaoAtual.id);
+    $('laudo-texto').value = laudo;
+    contestacaoAtual.laudo_texto = laudo;
+    toast('Laudo gerado.');
+  } catch(e){ toast('Falha ao gerar laudo: ' + e.message, 'erro'); }
+  finally { btn.disabled = false; btn.textContent = '✦ Elaborar laudo com IA'; }
+});
 async function avancar(){
   const btn = $('btn-proxima'); btn.disabled = true;
   try {
@@ -545,7 +592,16 @@ async function avancar(){
     if(etapa===2) await salvarEtapa2();
     if(etapa===3) await salvarEtapa3();
     if(etapa===3 && typeof montarPrevia==='function') montarPrevia();   // etapa 4; função criada na Task 8
-    // etapas 5,6 são adicionadas nas Tasks 8–9
+    if(etapa===5){
+      const editado = $('laudo-texto').value.trim();
+      if(!editado) throw new Error('Gere o laudo antes de avançar.');
+      if(editado !== (contestacaoAtual.laudo_texto||'')){
+        const { error } = await sb.from('contestacoes').update({ laudo_texto: editado }).eq('id', contestacaoAtual.id);
+        if(error) throw error;
+        contestacaoAtual.laudo_texto = editado;
+      }
+    }
+    // etapa 6 é adicionada na Task 9
     if(etapa<6){ etapa++; renderStepper(); toast(`Etapa ${etapa-1} salva.`); }
   } catch(e){ toast(e.message || String(e), 'erro'); }
   finally { btn.disabled = false; }
