@@ -696,6 +696,57 @@ $('btn-pendente').addEventListener('click', async ()=>{
     novaContestacao(); showPage('historico');
   } catch(e){ toast(e.message, 'erro'); }
 });
+
+/* ════════ histórico ════════ */
+function pillStatus(s){
+  const cls = s==='Finalizado' ? 'ok' : s==='Pendente' ? 'pend' : 'trat';
+  return `<span class="pill ${cls}">${s}</span>`;
+}
+async function carregarHistorico(){
+  const area = $('area-historico');
+  area.innerHTML = 'Carregando…';
+  const { data, error } = await sb.from('contestacoes').select('*')
+    .order('criado_em', { ascending:false }).limit(300);
+  if(error){ area.innerHTML = 'Erro: ' + error.message; return; }
+  if(!data.length){ area.innerHTML = 'Nenhuma contestação registrada ainda.'; return; }
+  area.innerHTML = `<table class="tabela clicavel"><thead><tr>
+    <th>Cliente</th><th>Banco</th><th>Motivo</th><th>Recebida</th><th>Etapa</th><th>Status</th>
+  </tr></thead><tbody>` + data.map(c=>`
+    <tr data-id="${c.id}">
+      <td>${c.nome_cliente}</td><td>${c.banco||'—'}</td><td>${c.motivo||'—'}</td>
+      <td class="mono">${fmtData(c.data_recebimento)}</td>
+      <td class="mono" style="color:var(--texto-sec)">${c.etapa_atual[0]}/6</td>
+      <td>${pillStatus(c.status)}</td>
+    </tr>`).join('') + '</tbody></table>';
+  area.querySelectorAll('tr[data-id]').forEach(tr=>{
+    tr.addEventListener('click', ()=> retomarContestacao(data.find(c=>c.id===tr.dataset.id)));
+  });
+}
+function set(id, v){ if($(id)) $(id).value = v ?? ''; }
+function retomarContestacao(c){
+  contestacaoAtual = c;
+  etapa = Number(c.etapa_atual[0]) || 1;
+  set('e1-nome', c.nome_cliente); set('e1-cpf', c.cpf); set('e1-ade', c.ade);
+  set('e1-banco', c.banco); set('e1-motivo', c.motivo); set('e1-canal', c.canal);
+  set('e1-data-recebimento', c.data_recebimento);
+  set('e2-convenio', c.convenio); set('e2-operacao', c.operacao);
+  set('e2-valor', c.valor_liberado); set('e2-parcela', c.valor_parcela); set('e2-qtd', c.qtd_parcelas);
+  set('e2-data-finalizacao', c.data_finalizacao_proposta); set('e2-processo', c.numero_processo_judicial);
+  set('e2-responsavel', c.responsavel); set('e2-risco', c.nivel_risco);
+  set('e2-fatos', c.descricao_fatos); set('e2-obs', c.observacao_interna);
+  set('e3-evidencias', c.situacao_evidencias); set('e3-arquivo-url', c.arquivo_evidencia_url);
+  set('e3-hyperflow', c.tem_conversas_hyperflow===true ? 'true' : c.tem_conversas_hyperflow===false ? 'false' : '');
+  $('e3-via-app').checked = !!c.operacao_via_app;
+  $('e3-procedimento').checked = !!c.procedimento_app_confirmado;
+  set('laudo-texto', c.laudo_texto);
+  set('e6-protocolo', c.protocolo_envio); set('e6-data-resposta', c.data_resposta);
+  set('e6-advogado', c.advogado_responsavel); set('e6-lista-restricao', c.lista_restricao);
+  $('e6-envio-confirmado').checked = !!c.envio_confirmado;
+  if(etapa===4) montarPrevia();
+  renderStepper();
+  showPage('nova');
+  toast(`Retomando: ${c.nome_cliente} (etapa ${etapa}).`);
+}
 </script>
 </body>
 </html>
