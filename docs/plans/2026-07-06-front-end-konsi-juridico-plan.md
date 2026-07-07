@@ -1144,7 +1144,7 @@ $('imp-arquivo').addEventListener('change', async (ev)=>{
     const r = await importarHistorico(registros);
     res.innerHTML = `✅ <b>${r.total_importados}</b> importados de ${r.total_recebidos} ·
       <b>${r.total_com_avisos}</b> com avisos de qualidade · lote <span class="mono">${r.lote_id}</span>
-      ${desconhecidos.length ? `<p style="color:var(--alerta);font-size:12px;margin-top:8px">Colunas ignoradas (sem mapeamento): ${desconhecidos.join(', ')}</p>` : ''}
+      ${desconhecidos.length ? `<p style="color:var(--alerta);font-size:12px;margin-top:8px">Colunas ignoradas (sem mapeamento): ${esc(desconhecidos.join(', '))}</p>` : ''}
       <button class="btn fantasma" id="btn-desfazer" style="margin-top:12px;color:var(--erro)">Desfazer este lote</button>`;
     $('btn-desfazer').addEventListener('click', async ()=>{
       if(!confirm('Remover TODOS os registros deste lote?')) return;
