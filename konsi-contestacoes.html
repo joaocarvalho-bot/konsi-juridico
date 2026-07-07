@@ -222,7 +222,25 @@ textarea.campo{min-height:84px;resize:vertical}
 </div></section>
       <section class="page" id="page-historico"><h1 class="titulo">Histórico</h1><p class="subtitulo">Contestações registradas no sistema. Clique numa linha para retomar.</p><div id="area-historico" class="card">Carregando…</div></section>
       <section class="page" id="page-dashboard"><h1 class="titulo">Dashboard</h1><p class="subtitulo">Indicadores operacionais + histórico consolidado.</p><div id="area-dashboard">Carregando…</div></section>
-      <section class="page" id="page-relatorios"><h1 class="titulo">Relatórios</h1><p class="subtitulo">Consulta filtrada sobre operacional + histórico.</p><div id="area-relatorios"></div></section>
+      <section class="page" id="page-relatorios"><h1 class="titulo">Relatórios</h1><p class="subtitulo">Consulta filtrada sobre operacional + histórico.</p><div id="area-relatorios">
+<div class="card" style="margin-bottom:14px">
+  <div class="grid-3">
+    <div><label class="lbl">De</label><input class="campo" id="r-de" type="date"></div>
+    <div><label class="lbl">Até</label><input class="campo" id="r-ate" type="date"></div>
+    <div><label class="lbl">Banco</label><input class="campo" id="r-banco" placeholder="(todos)"></div>
+    <div><label class="lbl">Convênio</label><select class="campo" id="r-convenio"></select></div>
+    <div><label class="lbl">Operação</label><select class="campo" id="r-operacao"></select></div>
+    <div><label class="lbl">Motivo</label><select class="campo" id="r-motivo"></select></div>
+    <div><label class="lbl">Canal</label><select class="campo" id="r-canal"></select></div>
+    <div><label class="lbl">Status</label><select class="campo" id="r-status"></select></div>
+  </div>
+  <div style="display:flex;gap:10px;margin-top:14px">
+    <button class="btn" id="btn-gerar-relatorio" type="button">Gerar relatório</button>
+    <button class="btn fantasma" id="btn-exportar-csv" type="button" disabled>Exportar CSV</button>
+  </div>
+</div>
+<div class="card" id="r-resultado">Defina os filtros e clique em Gerar.</div>
+</div></section>
       <section class="page" id="page-importacao"><h1 class="titulo">Importar histórico</h1><p class="subtitulo">Planilha antiga (.xlsx) → alimenta cohort e rankings.</p><div id="area-importacao"></div></section>
     </main>
   </div>
@@ -836,6 +854,60 @@ async function carregarDashboard(){
       <p style="font-size:12px;color:var(--texto-sec);margin-top:10px">Total geral (com histórico): <b class="mono">${kpis.total_geral_com_historico}</b> · No mês atual: <b class="mono">${kpis.total_mes_atual}</b></p>`;
   } catch(e){ area.textContent = 'Erro ao carregar dashboard: ' + e.message; }
 }
+
+/* ════════ dados: relatório (de cliente-supabase-exemplo.js §5) ════════ */
+async function gerarRelatorio(filtros) {
+  let query = sb.from('vw_contestacoes_consolidado').select('*');
+
+  if (filtros.dataInicio) query = query.gte('data_recebimento', filtros.dataInicio);
+  if (filtros.dataFim) query = query.lte('data_recebimento', filtros.dataFim);
+  if (filtros.operacao) query = query.eq('operacao', filtros.operacao);
+  if (filtros.convenio) query = query.eq('convenio', filtros.convenio);
+  if (filtros.banco) query = query.eq('banco', filtros.banco);
+  if (filtros.motivo) query = query.eq('motivo', filtros.motivo);
+  if (filtros.canal) query = query.eq('canal', filtros.canal);
+  if (filtros.status) query = query.eq('status', filtros.status);
+
+  const { data, error } = await query.order('data_recebimento', { ascending: false });
+  if (error) throw error;
+  return data;
+}
+
+/* ════════ relatórios ════════ */
+preencherSelect('r-convenio', OPCOES.convenio);
+preencherSelect('r-operacao', OPCOES.operacao);
+preencherSelect('r-motivo', OPCOES.motivo);
+preencherSelect('r-canal', OPCOES.canal);
+preencherSelect('r-status', ['Pendente','Em tratativa','Em aberto','Finalizado']);
+let relatorioLinhas = [];
+$('btn-gerar-relatorio').addEventListener('click', async ()=>{
+  const btn = $('btn-gerar-relatorio'); btn.disabled = true;
+  try {
+    relatorioLinhas = await gerarRelatorio({
+      dataInicio: val('r-de')||null, dataFim: val('r-ate')||null,
+      banco: val('r-banco')||null, convenio: val('r-convenio')||null,
+      operacao: val('r-operacao')||null, canal: val('r-canal')||null,
+      motivo: val('r-motivo')||null, status: val('r-status')||null,
+    });
+    $('btn-exportar-csv').disabled = !relatorioLinhas.length;
+    $('r-resultado').innerHTML = !relatorioLinhas.length ? 'Nenhum registro para os filtros.' :
+      `<p style="font-size:12px;color:var(--texto-sec);margin-bottom:10px"><b class="mono">${relatorioLinhas.length}</b> registros</p>` +
+      `<table class="tabela"><thead><tr><th>Cliente</th><th>Banco</th><th>Convênio</th><th>Motivo</th><th>Recebida</th><th>Status</th><th>Fonte</th></tr></thead><tbody>` +
+      relatorioLinhas.slice(0,500).map(l=>`<tr>
+        <td>${l.nome_cliente||'—'}</td><td>${l.banco||'—'}</td><td>${l.convenio||'—'}</td><td>${l.motivo||'—'}</td>
+        <td class="mono">${fmtData(l.data_recebimento)}</td><td>${l.status||'—'}</td>
+        <td><span class="pill ${l.fonte==='operacional'?'ok':'neutro'}">${l.fonte}</span></td></tr>`).join('') + '</tbody></table>';
+  } catch(e){ $('r-resultado').textContent = 'Erro: ' + e.message; }
+  finally { btn.disabled = false; }
+});
+$('btn-exportar-csv').addEventListener('click', ()=>{
+  const cab = ['nome_cliente','cpf','convenio','operacao','banco','ade','data_finalizacao_proposta','data_recebimento','data_resposta','motivo','status','canal','responsavel','nivel_risco','fonte'];
+  const csv = [cab.join(';')].concat(relatorioLinhas.map(l =>
+    cab.map(k => `"${String(l[k] ?? '').replace(/"/g,'""')}"`).join(';'))).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['﻿'+csv], {type:'text/csv;charset=utf-8'}));
+  a.download = 'relatorio-contestacoes.csv'; a.click();
+});
 </script>
 </body>
 </html>
