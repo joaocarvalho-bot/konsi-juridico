@@ -147,6 +147,41 @@ Deno.serve(async (req) => {
       resultado.laudoUrl = `https://drive.google.com/file/d/${arquivoData.id}/view`;
     }
 
+    // ── 2b. Copia o arquivo de evidência (Supabase Storage → Drive) ──────
+    // arquivo_evidencia_url guarda o CAMINHO no bucket "evidencias" quando o
+    // arquivo foi enviado por upload; se for um link externo (http...), pula.
+    if (c.arquivo_evidencia_url && !/^https?:\/\//i.test(c.arquivo_evidencia_url)) {
+      const caminho = c.arquivo_evidencia_url as string;
+      const { data: blob, error: dlErr } = await supabase
+        .storage.from('evidencias').download(caminho);
+      if (!dlErr && blob) {
+        const nomeEvid = caminho.split('/').pop() || 'evidencia';
+        const mime = blob.type || 'application/octet-stream';
+        const boundaryE = 'konsi_evid_' + Date.now();
+        const enc = new TextEncoder();
+        const pre = enc.encode(
+          `--${boundaryE}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n` +
+          JSON.stringify({ name: nomeEvid, parents: [pastaId] }) +
+          `\r\n--${boundaryE}\r\nContent-Type: ${mime}\r\n\r\n`
+        );
+        const post = enc.encode(`\r\n--${boundaryE}--`);
+        const corpo = new Blob([pre, new Uint8Array(await blob.arrayBuffer()), post]);
+        const evidResp = await fetch(
+          'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': `multipart/related; boundary=${boundaryE}`,
+            },
+            body: corpo,
+          }
+        );
+        const evidData = await evidResp.json();
+        if (evidData.id) resultado.evidenciaUrl = `https://drive.google.com/file/d/${evidData.id}/view`;
+      }
+    }
+
     // ── 3. Adiciona linha na planilha de controle (Google Sheets) ──────
     const linha = [
       c.nome_cliente, c.cpf, c.convenio, c.operacao, c.banco, c.ade,

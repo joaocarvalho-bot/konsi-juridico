@@ -174,8 +174,17 @@ textarea.campo{min-height:84px;resize:vertical}
   <fieldset class="etapa" id="etapa-3">
     <div class="grid-2">
       <div><label class="lbl">Situação das evidências</label><select class="campo" id="e3-evidencias"></select></div>
-      <div><label class="lbl">Link do arquivo de evidência (Drive)</label><input class="campo" id="e3-arquivo-url" placeholder="https://drive.google.com/…"></div>
       <div><label class="lbl">Conversas no Hyperflow?</label><select class="campo" id="e3-hyperflow"><option value="">—</option><option value="true">Sim</option><option value="false">Não</option></select></div>
+    </div>
+    <div style="margin-top:14px">
+      <label class="lbl">Arquivo de evidência (upload até 25 MB, ou cole um link)</label>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input type="file" id="e3-arquivo-file" style="display:none">
+        <button type="button" class="btn fantasma" id="e3-btn-upload" style="white-space:nowrap">↥ Enviar arquivo</button>
+        <button type="button" class="btn fantasma" id="e3-btn-baixar" style="white-space:nowrap;display:none">Baixar</button>
+        <input class="campo" id="e3-arquivo-url" placeholder="ou cole um link do Drive" style="flex:1;min-width:220px">
+      </div>
+      <div id="e3-upload-status" style="font-size:11px;color:var(--texto-sec);margin-top:6px"></div>
     </div>
     <div class="aviso-app">
       <label style="display:flex;align-items:center;gap:10px;font-weight:700;color:var(--verde-escuro);cursor:pointer">
@@ -628,6 +637,40 @@ preencherSelect('e2-convenio', OPCOES.convenio); preencherSelect('e2-operacao', 
 preencherSelect('e2-responsavel', OPCOES.responsavel); preencherSelect('e2-risco', OPCOES.risco);
 preencherSelect('e3-evidencias', OPCOES.evidencias);
 $('e1-data-recebimento').value = new Date().toISOString().slice(0,10);
+
+/* ════════ upload de evidência (Supabase Storage, bucket "evidencias") ════════ */
+const LIMITE_EVIDENCIA = 26214400; // 25 MB
+function mostrarEvidenciaAnexada(){
+  const v = val('e3-arquivo-url');
+  const ehArquivo = v && !/^https?:\/\//i.test(v);
+  $('e3-btn-baixar').style.display = ehArquivo ? '' : 'none';
+  if(ehArquivo) $('e3-upload-status').textContent = 'Arquivo anexado: ' + v.split('/').pop();
+}
+$('e3-btn-upload').addEventListener('click', ()=> $('e3-arquivo-file').click());
+$('e3-arquivo-file').addEventListener('change', async (ev)=>{
+  const file = ev.target.files[0]; if(!file) return;
+  if(!contestacaoAtual){ toast('Complete a etapa 1 antes de anexar arquivos.', 'erro'); ev.target.value=''; return; }
+  if(file.size > LIMITE_EVIDENCIA){ toast('Arquivo acima de 25 MB.', 'erro'); ev.target.value=''; return; }
+  const st = $('e3-upload-status'); st.textContent = 'Enviando…';
+  try {
+    const nomeLimpo = file.name.replace(/[^\w.\-]+/g, '_');
+    const caminho = `${contestacaoAtual.id}/${Date.now()}_${nomeLimpo}`;
+    const { error } = await sb.storage.from('evidencias').upload(caminho, file, { upsert:false });
+    if(error) throw error;
+    $('e3-arquivo-url').value = caminho;      // guardamos o CAMINHO; o sync copia pro Drive na finalização
+    st.textContent = '✓ ' + file.name + ' enviado';
+    $('e3-btn-baixar').style.display = '';
+    toast('Arquivo anexado.');
+  } catch(e){ st.textContent = ''; toast('Falha no upload: ' + e.message, 'erro'); }
+  finally { ev.target.value = ''; }
+});
+$('e3-btn-baixar').addEventListener('click', async ()=>{
+  const v = val('e3-arquivo-url'); if(!v) return;
+  if(/^https?:\/\//i.test(v)) return window.open(v, '_blank');   // link externo
+  const { data, error } = await sb.storage.from('evidencias').createSignedUrl(v, 300);
+  if(error) return toast('Falha ao gerar link: ' + error.message, 'erro');
+  window.open(data.signedUrl, '_blank');
+});
 $('e1-cpf').addEventListener('input', (e)=>{                       // máscara CPF
   let v = e.target.value.replace(/\D/g,'').slice(0,11);
   e.target.value = v.replace(/(\d{3})(\d)/,'$1.$2').replace(/(\d{3})(\d)/,'$1.$2').replace(/(\d{3})(\d{1,2})$/,'$1-$2');
@@ -715,6 +758,7 @@ function novaContestacao(){
     if(el.type==='checkbox') el.checked = false; else el.value = '';
   });
   $('e1-data-recebimento').value = new Date().toISOString().slice(0,10);
+  $('e3-upload-status').textContent = ''; $('e3-btn-baixar').style.display = 'none';
   renderStepper();
 }
 $('nav-nova').addEventListener('click', ()=>{ if(!contestacaoAtual) novaContestacao(); });
@@ -765,6 +809,7 @@ function retomarContestacao(c){
   set('e2-responsavel', c.responsavel); set('e2-risco', c.nivel_risco);
   set('e2-fatos', c.descricao_fatos); set('e2-obs', c.observacao_interna);
   set('e3-evidencias', c.situacao_evidencias); set('e3-arquivo-url', c.arquivo_evidencia_url);
+  $('e3-upload-status').textContent = ''; mostrarEvidenciaAnexada();
   set('e3-hyperflow', c.tem_conversas_hyperflow===true ? 'true' : c.tem_conversas_hyperflow===false ? 'false' : '');
   $('e3-via-app').checked = !!c.operacao_via_app;
   $('e3-procedimento').checked = !!c.procedimento_app_confirmado;
