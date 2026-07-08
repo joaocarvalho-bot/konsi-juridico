@@ -143,42 +143,51 @@ Deno.serve(async (req) => {
           body: multipartBody,
         }
       );
-      const arquivoData = await arquivoResp.json();
-      resultado.laudoUrl = `https://drive.google.com/file/d/${arquivoData.id}/view`;
+      const arquivoData = await arquivoResp.json().catch(() => ({}));
+      if (arquivoData.id) resultado.laudoUrl = `https://drive.google.com/file/d/${arquivoData.id}/view`;
     }
 
     // ── 2b. Copia o arquivo de evidência (Supabase Storage → Drive) ──────
     // arquivo_evidencia_url guarda o CAMINHO no bucket "evidencias" quando o
     // arquivo foi enviado por upload; se for um link externo (http...), pula.
+    // BEST-EFFORT: isolado em try/catch próprio — uma falha aqui (rede, Drive
+    // devolvendo HTML de erro, etc.) NÃO pode abortar a planilha de controle,
+    // a gravação dos links e o log de auditoria que vêm depois.
     if (c.arquivo_evidencia_url && !/^https?:\/\//i.test(c.arquivo_evidencia_url)) {
-      const caminho = c.arquivo_evidencia_url as string;
-      const { data: blob, error: dlErr } = await supabase
-        .storage.from('evidencias').download(caminho);
-      if (!dlErr && blob) {
-        const nomeEvid = caminho.split('/').pop() || 'evidencia';
-        const mime = blob.type || 'application/octet-stream';
-        const boundaryE = 'konsi_evid_' + Date.now();
-        const enc = new TextEncoder();
-        const pre = enc.encode(
-          `--${boundaryE}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n` +
-          JSON.stringify({ name: nomeEvid, parents: [pastaId] }) +
-          `\r\n--${boundaryE}\r\nContent-Type: ${mime}\r\n\r\n`
-        );
-        const post = enc.encode(`\r\n--${boundaryE}--`);
-        const corpo = new Blob([pre, new Uint8Array(await blob.arrayBuffer()), post]);
-        const evidResp = await fetch(
-          'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
-          {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-              'Content-Type': `multipart/related; boundary=${boundaryE}`,
-            },
-            body: corpo,
-          }
-        );
-        const evidData = await evidResp.json();
-        if (evidData.id) resultado.evidenciaUrl = `https://drive.google.com/file/d/${evidData.id}/view`;
+      try {
+        const caminho = c.arquivo_evidencia_url as string;
+        const { data: blob, error: dlErr } = await supabase
+          .storage.from('evidencias').download(caminho);
+        if (!dlErr && blob) {
+          const nomeEvid = caminho.split('/').pop() || 'evidencia';
+          // sanitiza o mime-type (defesa contra header injection via CRLF)
+          const mime = /^[\w.+-]+\/[\w.+-]+$/.test(blob.type) ? blob.type : 'application/octet-stream';
+          const boundaryE = 'konsi_evid_' + Date.now();
+          const enc = new TextEncoder();
+          const pre = enc.encode(
+            `--${boundaryE}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n` +
+            JSON.stringify({ name: nomeEvid, parents: [pastaId] }) +
+            `\r\n--${boundaryE}\r\nContent-Type: ${mime}\r\n\r\n`
+          );
+          const post = enc.encode(`\r\n--${boundaryE}--`);
+          const corpo = new Blob([pre, new Uint8Array(await blob.arrayBuffer()), post]);
+          const evidResp = await fetch(
+            'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+            {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'Content-Type': `multipart/related; boundary=${boundaryE}`,
+              },
+              body: corpo,
+            }
+          );
+          const evidData = await evidResp.json().catch(() => ({}));
+          if (evidData.id) resultado.evidenciaUrl = `https://drive.google.com/file/d/${evidData.id}/view`;
+        }
+      } catch (evidErr) {
+        // registra e segue — cópia de evidência é best-effort
+        resultado.evidenciaErro = String(evidErr);
       }
     }
 
