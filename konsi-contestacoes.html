@@ -162,6 +162,7 @@ textarea.campo{min-height:84px;resize:vertical}
       <div><label class="lbl">Valor da parcela (R$)</label><input class="campo" id="e2-parcela" inputmode="decimal"></div>
       <div><label class="lbl">Qtd. parcelas</label><input class="campo" id="e2-qtd" type="number" min="1"></div>
       <div><label class="lbl">Data da operação</label><input class="campo" id="e2-data-finalizacao" type="date"></div>
+      <div><label class="lbl">Data de pagamento</label><input class="campo" id="e2-data-pagamento" type="date"></div>
       <div><label class="lbl">Nº processo judicial</label><input class="campo" id="e2-processo"></div>
       <div><label class="lbl">Responsável</label><select class="campo" id="e2-responsavel"></select></div>
       <div><label class="lbl">Nível de risco</label><select class="campo" id="e2-risco"></select></div>
@@ -445,6 +446,7 @@ async function atualizarContestacaoEtapa2(id, dados) {
       valor_parcela: dados.valorParcela,
       qtd_parcelas: dados.qtdParcelas,
       data_finalizacao_proposta: dados.dataFinalizacao,
+      data_pagamento: dados.dataPagamento,
       numero_processo_judicial: dados.processo,
       responsavel: dados.responsavel,
       nivel_risco: dados.risco,
@@ -496,7 +498,7 @@ async function salvarEtapa2(){
     convenio: val('e2-convenio')||null, operacao: val('e2-operacao')||null,
     valorLiberado: num('e2-valor'), valorParcela: num('e2-parcela'),
     qtdParcelas: val('e2-qtd') ? Number(val('e2-qtd')) : null,
-    dataFinalizacao: val('e2-data-finalizacao')||null, processo: val('e2-processo')||null,
+    dataFinalizacao: val('e2-data-finalizacao')||null, dataPagamento: val('e2-data-pagamento')||null, processo: val('e2-processo')||null,
     responsavel: val('e2-responsavel')||null, risco: val('e2-risco')||null,
     fatos: val('e2-fatos')||null, observacao: val('e2-obs')||null,
   });
@@ -614,8 +616,8 @@ async function sincronizarComGoogle(contestacaoId) {
 const OPCOES = {
   motivo:['NÃO RECONHECE','FRAUDE','CANCELAMENTO','DESACORDO COMERCIAL','SUPERENDIVIDAMENTO','REVISIONAL','EXIBICAO DOCUMENTO','VENDA CASADA','SEGREDO DE JUSTIÇA'],
   canal:['Judicial','SAC Banco','E-mail','BACEN','Procon','Reclame Aqui','Consumidor.gov','Sistema Contest'],
-  responsavel:['Konsi','Banco','SEGREDO DE JUSTIÇA'],
-  risco:['Baixo','Médio','Alto','SEGREDO DE JUSTIÇA'],
+  responsavel:['Konsi','Banco','Konsi e Banco'],
+  risco:['Baixo','Médio','Alto'],
   evidencias:['Com evidências','Sem evidências','Dispensa evidência','A definir'],
   convenio:['INSS','GOV BA','GOV SP'],
   operacao:['Novo','Portabilidade','Refinanciamento','Cartão RMC','Cartão RCC'],  // validar lista com o jurídico
@@ -759,7 +761,7 @@ function retomarContestacao(c){
   set('e1-data-recebimento', c.data_recebimento);
   set('e2-convenio', c.convenio); set('e2-operacao', c.operacao);
   set('e2-valor', c.valor_liberado); set('e2-parcela', c.valor_parcela); set('e2-qtd', c.qtd_parcelas);
-  set('e2-data-finalizacao', c.data_finalizacao_proposta); set('e2-processo', c.numero_processo_judicial);
+  set('e2-data-finalizacao', c.data_finalizacao_proposta); set('e2-data-pagamento', c.data_pagamento); set('e2-processo', c.numero_processo_judicial);
   set('e2-responsavel', c.responsavel); set('e2-risco', c.nivel_risco);
   set('e2-fatos', c.descricao_fatos); set('e2-obs', c.observacao_interna);
   set('e3-evidencias', c.situacao_evidencias); set('e3-arquivo-url', c.arquivo_evidencia_url);

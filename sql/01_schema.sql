@@ -65,14 +65,13 @@ create type canal_contestacao as enum (
 create type responsavel_contestacao as enum (
   'Konsi',
   'Banco',
-  'SEGREDO DE JUSTIÇA'
+  'Konsi e Banco'   -- responsabilidade compartilhada (add. QoL 08/07/2026)
 );
 
 create type nivel_risco as enum (
   'Baixo',
   'Médio',
-  'Alto',
-  'SEGREDO DE JUSTIÇA'
+  'Alto'
 );
 
 -- IMPORTANTE: na planilha antiga "Evidências" tinha 3 estados, não 2.
@@ -150,6 +149,7 @@ create table contestacoes (
   valor_parcela numeric(14,2),
   qtd_parcelas integer,
   data_finalizacao_proposta date,        -- quando a operação foi celebrada
+  data_pagamento date,                   -- quando foi efetivamente paga (pode diferir da celebração)
   numero_processo_judicial text,
   responsavel responsavel_contestacao,
   nivel_risco nivel_risco,
