@@ -86,6 +86,9 @@ textarea.campo{min-height:84px;resize:vertical}
 .toast-item{background:var(--verde-mais-escuro);color:#fff;padding:12px 18px;border-radius:10px;font-size:13px;box-shadow:0 4px 16px rgba(0,0,0,.25)}
 .toast-item.erro{background:var(--erro)}
 .aviso-app{background:var(--verde-suave);border:1px solid var(--verde-borda);border-radius:var(--radius);padding:14px 16px;margin-top:16px}
+.acao-del{border:none;background:none;cursor:pointer;color:var(--texto-sec);padding:5px;border-radius:6px;display:inline-flex;align-items:center}
+.acao-del:hover{color:var(--erro);background:#FCECEC}
+.mini-btn{border:none;border-radius:6px;padding:3px 10px;font-family:inherit;font-size:11px;font-weight:700;cursor:pointer}
 </style>
 </head>
 <body>
@@ -784,25 +787,66 @@ function pillStatus(s){
   const cls = s==='Finalizado' ? 'ok' : s==='Pendente' ? 'pend' : 'trat';
   return `<span class="pill ${cls}">${esc(s)}</span>`;
 }
+const ICONE_LIXEIRA = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg>';
+let historicoData = [];
 async function carregarHistorico(){
   const area = $('area-historico');
+  const podeExcluir = !!(perfilAtual && perfilAtual.pode_excluir);
   area.innerHTML = 'Carregando…';
   const { data, error } = await sb.from('contestacoes').select('*')
     .order('criado_em', { ascending:false }).limit(300);
   if(error){ area.textContent = 'Erro: ' + error.message; return; }
   if(!data.length){ area.innerHTML = 'Nenhuma contestação registrada ainda.'; return; }
+  historicoData = data;
   area.innerHTML = `<table class="tabela clicavel"><thead><tr>
-    <th>Cliente</th><th>Banco</th><th>Motivo</th><th>Recebida</th><th>Etapa</th><th>Status</th>
+    <th>Cliente</th><th>Banco</th><th>Motivo</th><th>Recebida</th><th>Etapa</th><th>Status</th>${podeExcluir?'<th></th>':''}
   </tr></thead><tbody>` + data.map(c=>`
     <tr data-id="${c.id}">
       <td>${esc(c.nome_cliente)}</td><td>${esc(c.banco||'—')}</td><td>${esc(c.motivo||'—')}</td>
       <td class="mono">${fmtData(c.data_recebimento)}</td>
       <td class="mono" style="color:var(--texto-sec)">${c.etapa_atual[0]}/6</td>
       <td>${pillStatus(c.status)}</td>
+      ${podeExcluir?`<td style="text-align:right;white-space:nowrap"><button class="acao-del" data-acao="del" data-id="${c.id}" title="Excluir contestação" aria-label="Excluir">${ICONE_LIXEIRA}</button></td>`:''}
     </tr>`).join('') + '</tbody></table>';
+  // clique na linha retoma — MENOS quando o clique é num controle de ação
   area.querySelectorAll('tr[data-id]').forEach(tr=>{
-    tr.addEventListener('click', ()=> retomarContestacao(data.find(c=>c.id===tr.dataset.id)));
+    tr.addEventListener('click', (ev)=>{
+      if(ev.target.closest('[data-acao]')) return;
+      retomarContestacao(historicoData.find(c=>c.id===tr.dataset.id));
+    });
   });
+  // exclusão em 2 passos, via delegação
+  area.querySelectorAll('[data-acao]').forEach(el=> el.addEventListener('click', onAcaoHistorico));
+}
+function onAcaoHistorico(ev){
+  ev.stopPropagation();
+  const btn = ev.currentTarget, id = btn.dataset.id, cel = btn.closest('td');
+  const c = historicoData.find(x=>x.id===id);
+  if(btn.dataset.acao==='del'){
+    cel.innerHTML = `<span style="font-size:11px;color:var(--erro);margin-right:6px">Excluir?</span>`+
+      `<button class="mini-btn" data-acao="del-sim" data-id="${id}" style="background:var(--erro);color:#fff">Sim</button> `+
+      `<button class="mini-btn" data-acao="del-nao" style="background:var(--bg);color:var(--texto-sec);border:1px solid var(--borda)">Não</button>`;
+    cel.querySelectorAll('[data-acao]').forEach(e=> e.addEventListener('click', onAcaoHistorico));
+  } else if(btn.dataset.acao==='del-nao'){
+    carregarHistorico();
+  } else if(btn.dataset.acao==='del-sim'){
+    btn.disabled = true; btn.textContent = 'Excluindo…';
+    excluirContestacao(c);
+  }
+}
+async function excluirContestacao(c){
+  try {
+    // registra a exclusão ANTES de apagar (trilha sobrevive; contestacao_id vira null via FK)
+    await registrarLog('CONTESTACAO_EXCLUIDA', `Excluída: ${c.nome_cliente} (CPF ${c.cpf}) — id ${c.id}`, c.id);
+    // remove o arquivo de evidência do Storage se for upload (caminho, não link http)
+    if(c.arquivo_evidencia_url && !/^https?:\/\//i.test(c.arquivo_evidencia_url)){
+      await sb.storage.from('evidencias').remove([c.arquivo_evidencia_url]);
+    }
+    const { error } = await sb.from('contestacoes').delete().eq('id', c.id);
+    if(error) throw error;
+    toast('Contestação excluída.');
+  } catch(e){ toast('Falha ao excluir: ' + e.message, 'erro'); }
+  finally { carregarHistorico(); }
 }
 function set(id, v){ if($(id)) $(id).value = v ?? ''; }
 function retomarContestacao(c){

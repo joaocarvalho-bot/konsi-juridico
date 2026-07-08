@@ -57,10 +57,18 @@ create policy "Usuários autenticados podem atualizar contestações"
   using (true)
   with check (true);
 
--- Ninguém pode DELETAR contestações pelo front-end — isso é proposital.
--- Em compliance jurídico, registros não devem desaparecer; se um caso
--- foi aberto por engano, o correto é marcar/anotar, não apagar o rastro.
--- (Não criamos política de DELETE, então fica bloqueado por padrão.)
+-- DELETE de contestações é restrito a usuários PRIVILEGIADOS (flag
+-- usuarios_perfil.pode_excluir = true — Diretor/Coordenador/PM). A operação
+-- do dia a dia (Juliana) NÃO exclui. A checagem roda no banco, então a chave
+-- anon no front não contorna. Toda exclusão é registrada em logs_auditoria
+-- ANTES de apagar. (Decisão revista em 08/07/2026 — ver sql/07.)
+create policy "Exclusão de contestações por usuários privilegiados"
+  on contestacoes for delete
+  to authenticated
+  using (exists (
+    select 1 from usuarios_perfil p
+    where p.id = auth.uid() and p.pode_excluir
+  ));
 
 
 -- ----------------------------------------------------------------------------

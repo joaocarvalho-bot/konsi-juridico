@@ -107,6 +107,7 @@ create table usuarios_perfil (
   nome_completo text not null,
   cargo text not null,
   ativo boolean not null default true,
+  pode_excluir boolean not null default false,  -- permite hard delete de contestações (RLS)
   criado_em timestamptz not null default now()
 );
 
