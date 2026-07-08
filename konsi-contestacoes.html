@@ -175,24 +175,23 @@ textarea.campo{min-height:84px;resize:vertical}
     <div class="grid-2">
       <div><label class="lbl">Situação das evidências</label><select class="campo" id="e3-evidencias"></select></div>
       <div><label class="lbl">Possui Conversas na Mensageria?</label><select class="campo" id="e3-hyperflow"><option value="">—</option><option value="true">Sim</option><option value="false">Não</option></select></div>
+      <div><label class="lbl">Operação via app Konsi?</label><select class="campo" id="e3-via-app"><option value="">—</option><option value="true">Sim</option><option value="false">Não</option></select></div>
     </div>
     <div style="margin-top:14px">
       <label class="lbl">Arquivo de evidência (upload até 25 MB, ou cole um link)</label>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <input type="file" id="e3-arquivo-file" style="display:none">
-        <button type="button" class="btn fantasma" id="e3-btn-upload" style="white-space:nowrap">↥ Enviar arquivo</button>
+        <button type="button" class="btn fantasma" id="e3-btn-upload" style="white-space:nowrap"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><path d="M12 3v12"/><path d="M8 7l4-4 4 4"/><path d="M4 21h16"/></svg> Enviar arquivo</button>
         <button type="button" class="btn fantasma" id="e3-btn-baixar" style="white-space:nowrap;display:none">Baixar</button>
         <input class="campo" id="e3-arquivo-url" placeholder="ou cole um link do Drive" style="flex:1;min-width:220px">
       </div>
       <div id="e3-upload-status" style="font-size:11px;color:var(--texto-sec);margin-top:6px"></div>
     </div>
-    <div class="aviso-app">
-      <label style="display:flex;align-items:center;gap:10px;font-weight:700;color:var(--verde-escuro);cursor:pointer">
-        <input type="checkbox" id="e3-via-app" style="width:16px;height:16px;accent-color:#0A9F82"> Operação via app Konsi
-      </label>
-      <label style="display:flex;align-items:center;gap:10px;font-size:13px;margin-top:10px;cursor:pointer">
-        <input type="checkbox" id="e3-procedimento" style="width:16px;height:16px;accent-color:#0A9F82">
-        Confirmo que o procedimento de utilização do app será anexado ao laudo <span style="color:var(--erro);font-weight:700">*obrigatório se via app</span>
+    <div class="aviso-app" id="e3-aviso-app" style="display:none">
+      <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer">
+        <input type="checkbox" id="e3-procedimento" style="width:16px;height:16px;accent-color:#0A9F82;flex:none">
+        <span>Confirmo que o procedimento de utilização do app será anexado ao laudo</span>
+        <span style="font-size:10px;font-weight:700;color:var(--erro);background:#FCECEC;padding:3px 9px;border-radius:20px;white-space:nowrap">obrigatório</span>
       </label>
     </div>
   </fieldset>
@@ -517,7 +516,7 @@ async function salvarEtapa3(){
     situacaoEvidencias: val('e3-evidencias')||null,
     arquivoEvidenciaUrl: val('e3-arquivo-url')||null,
     temConversasHyperflow: val('e3-hyperflow')==='' ? null : val('e3-hyperflow')==='true',
-    operacaoViaApp: $('e3-via-app').checked,
+    operacaoViaApp: val('e3-via-app')==='true',
     procedimentoAppConfirmado: $('e3-procedimento').checked,
   });
 }
@@ -646,6 +645,14 @@ function mostrarEvidenciaAnexada(){
   $('e3-btn-baixar').style.display = ehArquivo ? '' : 'none';
   if(ehArquivo) $('e3-upload-status').textContent = 'Arquivo anexado: ' + v.split('/').pop();
 }
+// a caixa de confirmação do app só aparece quando "Operação via app Konsi?" = Sim
+function toggleAvisoApp(){
+  const viaApp = val('e3-via-app')==='true';
+  $('e3-aviso-app').style.display = viaApp ? '' : 'none';
+  if(!viaApp) $('e3-procedimento').checked = false;
+}
+$('e3-via-app').addEventListener('change', toggleAvisoApp);
+
 $('e3-btn-upload').addEventListener('click', ()=> $('e3-arquivo-file').click());
 $('e3-arquivo-file').addEventListener('change', async (ev)=>{
   const file = ev.target.files[0]; if(!file) return;
@@ -759,6 +766,7 @@ function novaContestacao(){
   });
   $('e1-data-recebimento').value = new Date().toISOString().slice(0,10);
   $('e3-upload-status').textContent = ''; $('e3-btn-baixar').style.display = 'none';
+  $('e3-aviso-app').style.display = 'none';
   renderStepper();
 }
 $('nav-nova').addEventListener('click', ()=>{ if(!contestacaoAtual) novaContestacao(); });
@@ -811,8 +819,9 @@ function retomarContestacao(c){
   set('e3-evidencias', c.situacao_evidencias); set('e3-arquivo-url', c.arquivo_evidencia_url);
   $('e3-upload-status').textContent = ''; mostrarEvidenciaAnexada();
   set('e3-hyperflow', c.tem_conversas_hyperflow===true ? 'true' : c.tem_conversas_hyperflow===false ? 'false' : '');
-  $('e3-via-app').checked = !!c.operacao_via_app;
+  set('e3-via-app', c.operacao_via_app===true ? 'true' : c.operacao_via_app===false ? 'false' : '');
   $('e3-procedimento').checked = !!c.procedimento_app_confirmado;
+  toggleAvisoApp();
   set('laudo-texto', c.laudo_texto);
   set('e6-protocolo', c.protocolo_envio); set('e6-data-resposta', c.data_resposta);
   set('e6-advogado', c.advogado_responsavel); set('e6-lista-restricao', c.lista_restricao);
