@@ -52,6 +52,22 @@ textarea.campo{min-height:84px;resize:vertical}
 .btn{background:var(--verde);color:#fff;border:none;padding:10px 20px;border-radius:var(--radius-sm);font-family:inherit;font-weight:700;font-size:14px;cursor:pointer;display:inline-flex;align-items:center;gap:8px}
 .btn:hover{background:var(--verde-escuro)}
 .btn:disabled{opacity:.55;cursor:not-allowed}
+/* ── recepção / auto-preenchimento por IA ── */
+.recepcao-ia{background:var(--verde-suave);border:1px solid var(--verde-borda);border-radius:var(--radius);padding:14px 16px;margin-bottom:18px}
+.recepcao-head{font-weight:800;color:var(--verde-escuro);font-size:13px;margin-bottom:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.recepcao-head .ia-hint{font-weight:500;color:var(--texto-sec);font-size:12px}
+.recepcao-acoes{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px}
+.ia-nota{font-size:11px;color:var(--texto-sec);margin-top:10px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.ia-leg{display:inline-flex;align-items:center;gap:2px}
+.ia-leg .dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin:0 4px 0 10px;vertical-align:middle}
+.dot-alta{background:var(--verde)}.dot-media{background:#E3B341}.dot-vazio{background:transparent;border:1px dashed var(--borda-forte)}
+.ia-badge{font-size:9px;font-weight:800;text-transform:none;letter-spacing:0;padding:1px 7px;border-radius:20px;margin-left:8px;vertical-align:middle}
+.ia-badge--alta{background:var(--verde-suave);color:var(--verde-escuro)}
+.ia-badge--media{background:#FBF3D9;color:var(--alerta)}
+.ia-badge--vazio{background:#F1F3F2;color:var(--texto-sec)}
+.campo--alta{border-color:var(--verde-borda);background:#F3FBF9}
+.campo--media{border-color:#E3B341;background:#FDF9EC}
+.campo--vazio{border-style:dashed;border-color:var(--borda-forte)}
 .btn.fantasma{background:#fff;color:var(--verde-escuro);border:1px solid var(--borda-forte)}
 .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
@@ -145,6 +161,21 @@ textarea.campo{min-height:84px;resize:vertical}
   <div class="stepper" id="stepper"></div>
 
   <fieldset class="etapa ativa" id="etapa-1">
+    <div class="recepcao-ia" id="recepcao-ia">
+      <div class="recepcao-head">✦ Recepção — pré-preencher com IA <span class="ia-hint">cole o e-mail, ou envie o PDF/print da notificação</span></div>
+      <textarea class="campo" id="ia-texto" placeholder="Cole aqui o texto do e-mail da notificação…" style="min-height:88px"></textarea>
+      <div class="recepcao-acoes">
+        <input type="file" id="ia-file" accept=".pdf,image/*" style="display:none">
+        <button type="button" class="btn fantasma" id="ia-btn-file" style="white-space:nowrap">📎 PDF / print</button>
+        <span id="ia-file-nome" style="font-size:12px;color:var(--texto-sec)"></span>
+        <button type="button" class="btn" id="ia-btn-extrair" style="white-space:nowrap">✦ Extrair com IA</button>
+        <span id="ia-status" style="font-size:12px"></span>
+      </div>
+      <div class="ia-nota">
+        <span>A IA só pré-preenche — <b>nada é salvo sem sua revisão</b>.</span>
+        <span class="ia-leg"><i class="dot dot-alta"></i>literal <i class="dot dot-media"></i>conferir <i class="dot dot-vazio"></i>manual</span>
+      </div>
+    </div>
     <div class="grid-2">
       <div><label class="lbl">Nome do cliente *</label><input class="campo" id="e1-nome"></div>
       <div><label class="lbl">CPF *</label><input class="campo" id="e1-cpf" placeholder="000.000.000-00" maxlength="14"></div>
@@ -731,6 +762,106 @@ $('btn-gerar-laudo').addEventListener('click', async ()=>{
   } catch(e){ toast('Falha ao gerar laudo: ' + e.message, 'erro'); }
   finally { btn.disabled = false; btn.textContent = '✦ Elaborar laudo com IA'; }
 });
+
+/* ════════ recepção: auto-preenchimento por IA (Edge Function extrair-dados) ════════ */
+// campo extraído (chave do schema) → id do input do formulário
+const IA_MAP = {
+  nome_cliente:'e1-nome', cpf:'e1-cpf', banco:'e1-banco', ade:'e1-ade',
+  motivo:'e1-motivo', canal:'e1-canal', data_recebimento:'e1-data-recebimento',
+  convenio:'e2-convenio', operacao:'e2-operacao', valor_liberado:'e2-valor',
+  valor_parcela:'e2-parcela', qtd_parcelas:'e2-qtd', data_operacao:'e2-data-finalizacao',
+  data_pagamento:'e2-data-pagamento', numero_processo:'e2-processo', descricao_fatos:'e2-fatos',
+};
+// numero_proposta, prazo_resposta, link_portal, subsidios, contratos_adicionais → observação interna
+
+function marcarCampo(id, estado, titulo){
+  const el = $(id); if(!el) return;
+  el.classList.remove('campo--alta','campo--media','campo--vazio');
+  el.classList.add('campo--'+estado);
+  const lbl = el.closest('div') && el.closest('div').querySelector('label.lbl');
+  if(!lbl) return;
+  const antigo = lbl.querySelector('.ia-badge'); if(antigo) antigo.remove();
+  const b = document.createElement('span');
+  b.className = 'ia-badge ia-badge--'+estado;
+  b.textContent = estado==='alta' ? 'IA ✓' : estado==='media' ? 'conferir' : 'manual';
+  if(titulo) b.title = titulo;
+  lbl.appendChild(b);
+}
+
+function aplicarExtracao(res){
+  const campos = res.campos || {};
+  for(const [chave, id] of Object.entries(IA_MAP)){
+    const c = campos[chave];
+    if(c && c.valor != null && c.confianca !== 'vazio'){
+      set(id, c.valor);
+      marcarCampo(id, c.confianca, c.evidencia || c.motivo || '');
+    } else if(!val(id)){
+      marcarCampo(id, 'vazio', 'não encontrado pela IA — preencher manualmente');
+    }
+  }
+  // campos sem coluna própria + listas + flags do validador → observação interna
+  const extras = [];
+  const add = (rot, v) => { if(v != null && v !== '') extras.push(rot + ': ' + v); };
+  add('Proposta', campos.numero_proposta && campos.numero_proposta.valor);
+  add('Prazo p/ resposta', campos.prazo_resposta && campos.prazo_resposta.valor);
+  add('Portal', campos.link_portal && campos.link_portal.valor);
+  if((res.contratos_adicionais||[]).length) extras.push('Contratos adicionais: ' + res.contratos_adicionais.join(' | '));
+  if((res.subsidios||[]).length) extras.push('Subsídios pedidos:\n- ' + res.subsidios.join('\n- '));
+  if(res.observacoes_extras) extras.push('Obs IA: ' + res.observacoes_extras);
+  if((res.validacao && res.validacao.flags || []).length) extras.push('⚠️ Validador: ' + res.validacao.flags.join(' · '));
+  if(extras.length){
+    const bloco = '— Auto-extração IA —\n' + extras.join('\n');
+    set('e2-obs', val('e2-obs') ? val('e2-obs') + '\n\n' + bloco : bloco);
+  }
+  return Object.values(campos).filter(c => c && c.valor != null && c.confianca !== 'vazio').length;
+}
+
+function arquivoBase64(file){
+  return new Promise((ok, err)=>{
+    const r = new FileReader();
+    r.onload = ()=> ok(String(r.result).split(',')[1]);
+    r.onerror = ()=> err(new Error('Falha ao ler o arquivo.'));
+    r.readAsDataURL(file);
+  });
+}
+
+async function extrairComIA(){
+  const texto = (val('ia-texto')||'').trim();
+  const file = $('ia-file').files[0];
+  if(!texto && !file){ toast('Cole o e-mail ou envie um PDF/print primeiro.', 'erro'); return; }
+  const btn = $('ia-btn-extrair'), status = $('ia-status');
+  btn.disabled = true; btn.textContent = 'Extraindo…'; status.textContent = '';
+  try {
+    let body;
+    if(file){
+      const tipo = file.type === 'application/pdf' ? 'pdf' : 'imagem';
+      body = { tipo, arquivo_base64: await arquivoBase64(file), mime: file.type };
+    } else {
+      body = { tipo:'email', texto };
+    }
+    const { data: sessao } = await sb.auth.getSession();
+    const resp = await fetch(`${SUPABASE_URL}/functions/v1/extrair-dados`, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${sessao.session.access_token}` },
+      body: JSON.stringify(body),
+    });
+    const res = await resp.json();
+    if(!resp.ok) throw new Error(res.erro || 'Falha na extração');
+    const n = aplicarExtracao(res);
+    status.innerHTML = `<span style="color:var(--verde);font-weight:700">✓ ${n} campos preenchidos</span> · revise antes de salvar`;
+    toast('Pré-preenchido pela IA. Confira os campos destacados.');
+  } catch(e){
+    status.innerHTML = `<span style="color:var(--erro)">${e.message}</span>`;
+    toast('Falha na extração: ' + e.message, 'erro');
+  } finally {
+    btn.disabled = false; btn.textContent = '✦ Extrair com IA';
+  }
+}
+
+$('ia-btn-file').addEventListener('click', ()=> $('ia-file').click());
+$('ia-file').addEventListener('change', ()=>{ $('ia-file-nome').textContent = ($('ia-file').files[0]||{}).name || ''; });
+$('ia-btn-extrair').addEventListener('click', extrairComIA);
+
 async function avancar(){
   const btn = $('btn-proxima'); btn.disabled = true;
   try {
