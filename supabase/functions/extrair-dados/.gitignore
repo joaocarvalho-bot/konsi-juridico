@@ -1,0 +1,4 @@
+# prompt.ts é GERADO a partir do repo privado de calibração (konsi-juridico-ia)
+# e não é versionado aqui — mantém a heurística de extração por banco fora do
+# repo público. Regenerar antes do deploy (ver README.md).
+prompt.ts
