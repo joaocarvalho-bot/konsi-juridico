@@ -118,6 +118,15 @@ textarea.campo{height:auto;min-height:88px;padding:var(--sp3);resize:vertical;li
 .kpi--hero{background:var(--green-700);border-color:transparent;box-shadow:var(--shadow-md)}
 .kpi--hero .num{color:#fff}
 .kpi--hero .rotulo{color:var(--green-100)}
+/* skeletons de loading + estados vazios */
+@keyframes skel{0%{background-position:-260px 0}100%{background-position:calc(260px + 100%) 0}}
+.skel{background:var(--n100);background-image:linear-gradient(90deg,var(--n100),var(--n50),var(--n100));background-size:600px 100%;background-repeat:no-repeat;border-radius:6px;animation:skel 1.3s ease-in-out infinite}
+.skel-row{height:14px;margin-bottom:12px}
+@media(prefers-reduced-motion:reduce){.skel{animation:none}}
+.vazio{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--sp2);padding:var(--sp8) var(--sp5);text-align:center}
+.vazio svg{width:36px;height:36px;color:var(--n300)}
+.vazio .t{font-size:var(--text-base);font-weight:600;color:var(--n700)}
+.vazio .s{font-size:var(--text-sm);color:var(--n500);max-width:340px}
 .barra-trilho{background:var(--bg);border-radius:6px;height:10px;overflow:hidden}
 .barra{background:var(--verde);height:100%;border-radius:6px;transition:width .4s}
 .linha-barra{margin-bottom:11px}
@@ -962,14 +971,18 @@ function pillStatus(s){
 }
 const ICONE_LIXEIRA = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg>';
 let historicoData = [];
+function estadoVazio(paths, titulo, sub){
+  return `<div class="vazio"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${paths}</svg><div class="t">${titulo}</div><div class="s">${sub}</div></div>`;
+}
+function skelLinhas(larguras){ return larguras.map(w=>`<div class="skel skel-row" style="width:${w}"></div>`).join(''); }
 async function carregarHistorico(){
   const area = $('area-historico');
   const podeExcluir = !!(perfilAtual && perfilAtual.pode_excluir);
-  area.innerHTML = 'Carregando…';
+  area.innerHTML = '<div class="skel skel-row" style="width:35%;height:18px;margin-bottom:18px"></div>' + skelLinhas(['88%','72%','90%','66%','82%','76%']);
   const { data, error } = await sb.from('contestacoes').select('*')
     .order('criado_em', { ascending:false }).limit(300);
   if(error){ area.textContent = 'Erro: ' + error.message; return; }
-  if(!data.length){ area.innerHTML = 'Nenhuma contestação registrada ainda.'; return; }
+  if(!data.length){ area.innerHTML = estadoVazio('<path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2Z"/><path d="M9 13h6M9 17h4"/>', 'Nenhuma contestação ainda', 'As contestações que você registrar aparecem aqui.'); return; }
   historicoData = data;
   area.innerHTML = `<table class="tabela clicavel"><thead><tr>
     <th>Cliente</th><th>Banco</th><th>Motivo</th><th>Recebida</th><th>Etapa</th><th>Status</th>${podeExcluir?'<th></th>':''}
@@ -1098,7 +1111,7 @@ function barras(titulo, linhas, campoLabel, campoValor){
 }
 async function carregarDashboard(){
   const area = $('area-dashboard');
-  area.textContent = 'Carregando…';
+  area.innerHTML = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px">' + Array.from({length:4}).map(()=>'<div class="skel" style="height:74px;border-radius:12px"></div>').join('') + '</div><div class="skel" style="height:200px;border-radius:12px"></div>';
   try {
     const [kpis, bancos, produtos, tempos, cohort, volume] = await Promise.all([
       buscarKpisDashboard(), buscarRankingBancos(), buscarRankingProdutos(),
@@ -1244,7 +1257,7 @@ $('btn-gerar-relatorio').addEventListener('click', async ()=>{
       motivo: val('r-motivo')||null, status: val('r-status')||null,
     });
     $('btn-exportar-csv').disabled = !relatorioLinhas.length;
-    $('r-resultado').innerHTML = !relatorioLinhas.length ? 'Nenhum registro para os filtros.' :
+    $('r-resultado').innerHTML = !relatorioLinhas.length ? estadoVazio('<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>', 'Nenhum resultado', 'Nenhum registro bate com os filtros. Ajuste o período ou os campos.') :
       `<p style="font-size:12px;color:var(--texto-sec);margin-bottom:10px"><b class="mono">${relatorioLinhas.length}</b> registros</p>` +
       `<table class="tabela"><thead><tr><th>Cliente</th><th>Banco</th><th>Convênio</th><th>Motivo</th><th>Recebida</th><th>Status</th><th>Fonte</th></tr></thead><tbody>` +
       relatorioLinhas.slice(0,500).map(l=>`<tr>
