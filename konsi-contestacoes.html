@@ -55,9 +55,16 @@ textarea.campo{min-height:84px;resize:vertical}
 /* ── recepção / auto-preenchimento por IA ── */
 .recepcao-ia{background:var(--verde-suave);border:1px solid var(--verde-borda);border-radius:var(--radius);padding:14px 16px;margin-bottom:18px}
 .recepcao-head{font-weight:800;color:var(--verde-escuro);font-size:13px;margin-bottom:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.recepcao-head .ia-hint{font-weight:500;color:var(--texto-sec);font-size:12px}
-.recepcao-acoes{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px}
-.ia-nota{font-size:11px;color:var(--texto-sec);margin-top:10px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.recepcao-head .ia-leg{margin-left:auto;font-weight:500}
+.ia-drop{margin-top:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center;padding:20px 16px;border:1.5px dashed var(--verde-borda);border-radius:var(--radius-sm);background:#F3FBF9;color:var(--verde-escuro);cursor:pointer}
+.ia-drop:hover,.ia-drop:focus-visible{background:#EAF7F3;border-color:var(--verde);outline:none}
+.ia-drop.arrastando{background:#EAF7F3;border-color:var(--verde)}
+.ia-drop.tem-arquivo{border-style:solid}
+.ia-drop-ico{font-size:22px;font-style:normal;line-height:1}
+.ia-drop-txt{font-size:13px}
+.ia-file-nome{font-size:12px;font-weight:700;color:var(--verde);word-break:break-all}
+.recepcao-acoes{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px}
+.ia-status{font-size:12px}
 .ia-leg{display:inline-flex;align-items:center;gap:2px}
 .ia-leg .dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin:0 4px 0 10px;vertical-align:middle}
 .dot-alta{background:var(--verde)}.dot-media{background:#E3B341}.dot-vazio{background:transparent;border:1px dashed var(--borda-forte)}
@@ -162,18 +169,18 @@ textarea.campo{min-height:84px;resize:vertical}
 
   <fieldset class="etapa ativa" id="etapa-1">
     <div class="recepcao-ia" id="recepcao-ia">
-      <div class="recepcao-head">✦ Recepção — pré-preencher com IA <span class="ia-hint">cole o e-mail, ou envie o PDF/print da notificação</span></div>
-      <textarea class="campo" id="ia-texto" placeholder="Cole aqui o texto do e-mail da notificação…" style="min-height:88px"></textarea>
-      <div class="recepcao-acoes">
-        <input type="file" id="ia-file" accept=".pdf,image/*" style="display:none">
-        <button type="button" class="btn fantasma" id="ia-btn-file" style="white-space:nowrap">📎 PDF / print</button>
-        <span id="ia-file-nome" style="font-size:12px;color:var(--texto-sec)"></span>
-        <button type="button" class="btn" id="ia-btn-extrair" style="white-space:nowrap">✦ Extrair com IA</button>
-        <span id="ia-status" style="font-size:12px"></span>
-      </div>
-      <div class="ia-nota">
-        <span>A IA só pré-preenche — <b>nada é salvo sem sua revisão</b>.</span>
+      <div class="recepcao-head">✦ Recepção — pré-preencher com IA
         <span class="ia-leg"><i class="dot dot-alta"></i>literal <i class="dot dot-media"></i>conferir <i class="dot dot-vazio"></i>manual</span>
+      </div>
+      <input type="file" id="ia-file" accept=".eml,message/rfc822,.pdf,image/*" style="display:none">
+      <div class="ia-drop" id="ia-drop" role="button" tabindex="0" aria-label="Selecionar ou arrastar o e-mail (.eml), PDF ou print da notificação">
+        <i class="ia-drop-ico">📎</i>
+        <div class="ia-drop-txt"><b>Selecione ou arraste</b> o e-mail (.eml), PDF ou print da notificação</div>
+        <div id="ia-file-nome" class="ia-file-nome"></div>
+      </div>
+      <div class="recepcao-acoes">
+        <button type="button" class="btn" id="ia-btn-extrair" style="white-space:nowrap">✦ Extrair com IA</button>
+        <span id="ia-status" class="ia-status"></span>
       </div>
     </div>
     <div class="grid-2">
@@ -825,20 +832,27 @@ function arquivoBase64(file){
   });
 }
 
+// .eml é texto: limpa quoted-printable + tags HTML antes de mandar pro modelo
+function emlParaTexto(raw){
+  let s = String(raw || '');
+  s = s.replace(/=\r?\n/g, '').replace(/(=[0-9A-Fa-f]{2})+/g, m => { try { return decodeURIComponent(m.replace(/=/g, '%')); } catch(e){ return m; } });
+  s = s.replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/gi, ' ');
+  return s.replace(/[ \t]{2,}/g, ' ').replace(/\n{3,}/g, '\n\n').trim().slice(0, 20000);
+}
+
 async function extrairComIA(){
-  const texto = (val('ia-texto')||'').trim();
   const file = $('ia-file').files[0];
-  if(!texto && !file){ toast('Cole o e-mail ou envie um PDF/print primeiro.', 'erro'); return; }
+  if(!file){ toast('Selecione o e-mail (.eml), PDF ou print primeiro.', 'erro'); return; }
   const btn = $('ia-btn-extrair'), status = $('ia-status');
   btn.disabled = true; btn.textContent = 'Extraindo…'; status.textContent = '';
   try {
+    const nome = (file.name || '').toLowerCase();
+    const ehPdf = file.type === 'application/pdf' || nome.endsWith('.pdf');
+    const ehImg = (file.type || '').startsWith('image/') || /\.(png|jpe?g|webp|gif|bmp)$/.test(nome);
     let body;
-    if(file){
-      const tipo = file.type === 'application/pdf' ? 'pdf' : 'imagem';
-      body = { tipo, arquivo_base64: await arquivoBase64(file), mime: file.type };
-    } else {
-      body = { tipo:'email', texto };
-    }
+    if(ehPdf){ body = { tipo:'pdf', arquivo_base64: await arquivoBase64(file) }; }
+    else if(ehImg){ body = { tipo:'imagem', arquivo_base64: await arquivoBase64(file), mime: file.type || 'image/png' }; }
+    else { body = { tipo:'email', texto: emlParaTexto(await file.text()) }; }
     const { data: sessao } = await sb.auth.getSession();
     const resp = await fetch(`${SUPABASE_URL}/functions/v1/extrair-dados`, {
       method:'POST',
@@ -858,8 +872,18 @@ async function extrairComIA(){
   }
 }
 
-$('ia-btn-file').addEventListener('click', ()=> $('ia-file').click());
-$('ia-file').addEventListener('change', ()=>{ $('ia-file-nome').textContent = ($('ia-file').files[0]||{}).name || ''; });
+function selecionarArquivo(f){
+  if(!f) return;
+  $('ia-file-nome').textContent = f.name || '';
+  $('ia-drop').classList.add('tem-arquivo');
+}
+const _iaDrop = $('ia-drop');
+_iaDrop.addEventListener('click', ()=> $('ia-file').click());
+_iaDrop.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); $('ia-file').click(); } });
+$('ia-file').addEventListener('change', ()=> selecionarArquivo($('ia-file').files[0]));
+['dragover','dragenter'].forEach(ev => _iaDrop.addEventListener(ev, e=>{ e.preventDefault(); _iaDrop.classList.add('arrastando'); }));
+['dragleave','drop'].forEach(ev => _iaDrop.addEventListener(ev, e=>{ e.preventDefault(); _iaDrop.classList.remove('arrastando'); }));
+_iaDrop.addEventListener('drop', e=>{ const f = e.dataTransfer.files[0]; if(f){ $('ia-file').files = e.dataTransfer.files; selecionarArquivo(f); } });
 $('ia-btn-extrair').addEventListener('click', extrairComIA);
 
 async function avancar(){
