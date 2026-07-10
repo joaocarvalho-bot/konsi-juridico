@@ -36,9 +36,9 @@ body{font-family:'Manrope',system-ui,sans-serif;background:var(--bg);color:var(-
 .logo-box{display:flex;align-items:center;justify-content:center;background:var(--verde);border-radius:9px;flex:none}
 .logo-box svg{width:64%;height:64%}
 /* ── login ── */
-#tela-login{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--verde-mais-escuro)}
-.login-card{width:340px;background:var(--card);border-radius:16px;padding:32px 28px}
-.login-card .marca{display:flex;align-items:center;gap:11px;margin-bottom:22px}
+#tela-login{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--verde-mais-escuro);padding:var(--sp4)}
+.login-card{width:360px;max-width:100%;background:var(--card);border-radius:16px;padding:var(--sp8) var(--sp6);box-shadow:var(--shadow-lg);border-top:3px solid var(--verde)}
+.login-card .marca{display:flex;align-items:center;gap:var(--sp3);margin-bottom:var(--sp6)}
 /* ── shell ── */
 #app{display:none;grid-template-columns:240px 1fr;min-height:100vh}
 #app.logado{display:grid}
@@ -95,11 +95,16 @@ textarea.campo{height:auto;min-height:88px;padding:var(--sp3);resize:vertical;li
 .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
 .grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
 /* ── stepper ── */
-.stepper{display:flex;gap:8px;margin-bottom:22px;flex-wrap:wrap}
-.step{flex:1;min-width:100px;padding:10px 8px;border-radius:10px;background:#fff;border:1px solid var(--borda);font-size:12px;color:var(--texto-sec);text-align:center}
-.step.ativa{background:var(--verde-suave);border-color:var(--verde-borda);color:var(--verde-escuro);font-weight:700}
-.step.feita{color:var(--verde)}
-.step b{display:block;font-size:15px;margin-bottom:2px}
+.stepper{display:flex;align-items:flex-start;margin-bottom:var(--sp6)}
+.step{flex:1;min-width:0;position:relative;display:flex;flex-direction:column;align-items:center;text-align:center;background:none;border:none;padding:0;font-size:var(--text-xs);color:var(--n400)}
+.step::before{content:"";position:absolute;top:13px;left:-50%;width:100%;height:2px;background:var(--n200);z-index:0}
+.step:first-child::before{display:none}
+.step.ativa::before,.step.feita::before{background:var(--verde)}
+.step b{display:flex;align-items:center;justify-content:center;position:relative;z-index:1;width:26px;height:26px;border-radius:50%;margin-bottom:6px;background:var(--card);border:2px solid var(--n300);color:var(--n400);font-size:12px;font-weight:600;font-family:'JetBrains Mono',monospace}
+.step.ativa{color:var(--n700);font-weight:600}
+.step.ativa b{background:var(--verde);border-color:var(--verde);color:#fff;box-shadow:0 0 0 4px var(--green-50)}
+.step.feita{color:var(--n700)}
+.step.feita b{background:var(--verde);border-color:var(--verde);color:#fff}
 .etapa{display:none;border:none}
 .etapa.ativa{display:block}
 /* ── tabela / kpi / barras / pills ── */
@@ -107,9 +112,12 @@ textarea.campo{height:auto;min-height:88px;padding:var(--sp3);resize:vertical;li
 .tabela th{text-align:left;color:var(--texto-sec);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px;padding:9px 10px;border-bottom:1px solid var(--borda)}
 .tabela td{padding:10px;border-bottom:1px solid var(--borda)}
 .tabela.clicavel tbody tr:hover{background:var(--verde-suave);cursor:pointer}
-.kpi{background:var(--verde-suave);border-radius:10px;padding:14px 16px}
+.kpi{background:var(--card);border:1px solid var(--n200);border-radius:var(--radius);padding:var(--sp4) var(--sp5);box-shadow:var(--shadow-xs)}
 .kpi .num{font-size:var(--text-2xl);font-weight:700;color:var(--verde-escuro);font-family:'JetBrains Mono',monospace;letter-spacing:-.02em}
-.kpi .rotulo{font-size:12px;color:var(--texto-sec);margin-top:2px}
+.kpi .rotulo{font-size:var(--text-xs);color:var(--n500);margin-top:var(--sp1);font-weight:500}
+.kpi--hero{background:var(--green-700);border-color:transparent;box-shadow:var(--shadow-md)}
+.kpi--hero .num{color:#fff}
+.kpi--hero .rotulo{color:var(--green-100)}
 .barra-trilho{background:var(--bg);border-radius:6px;height:10px;overflow:hidden}
 .barra{background:var(--verde);height:100%;border-radius:6px;transition:width .4s}
 .linha-barra{margin-bottom:11px}
@@ -140,7 +148,7 @@ textarea.campo{height:auto;min-height:88px;padding:var(--sp3);resize:vertical;li
 <div id="tela-login">
   <form class="login-card" id="form-login">
     <div class="marca">
-      <div class="logo-box" style="width:40px;height:40px"><svg><use href="#konsi-mark"/></svg></div>
+      <div class="logo-box" style="width:48px;height:48px"><svg><use href="#konsi-mark"/></svg></div>
       <div><div style="font-weight:700;color:var(--verde-escuro);font-size:16px">Konsi Jurídico</div>
       <div style="font-size:11px;color:var(--texto-sec)">Gestão de contestações</div></div>
     </div>
@@ -159,13 +167,13 @@ textarea.campo{height:auto;min-height:88px;padding:var(--sp3);resize:vertical;li
       <div class="logo-box" style="width:30px;height:30px"><svg><use href="#konsi-mark"/></svg></div>
       Konsi Jurídico
     </div>
-    <button class="nav-item ativo" id="nav-nova"       onclick="showPage('nova')">＋ Nova contestação</button>
-    <button class="nav-item" id="nav-historico"  onclick="showPage('historico')">≡ Histórico</button>
-    <button class="nav-item" id="nav-dashboard"  onclick="showPage('dashboard')">▤ Dashboard</button>
-    <button class="nav-item" id="nav-relatorios" onclick="showPage('relatorios')">▦ Relatórios</button>
-    <button class="nav-item" id="nav-importacao" onclick="showPage('importacao')">↥ Importar histórico</button>
+    <button class="nav-item ativo" id="nav-nova"       onclick="showPage('nova')"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2Z"/><path d="M12 11v6M9 14h6"/></svg> Nova contestação</button>
+    <button class="nav-item" id="nav-historico"  onclick="showPage('historico')"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 4v4h4M12 8v4l3 2"/></svg> Histórico</button>
+    <button class="nav-item" id="nav-dashboard"  onclick="showPage('dashboard')"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg> Dashboard</button>
+    <button class="nav-item" id="nav-relatorios" onclick="showPage('relatorios')"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M18 21H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8l6 6v10a2 2 0 0 1-2 2Z"/><path d="M8 13h8M8 17h5"/></svg> Relatórios</button>
+    <button class="nav-item" id="nav-importacao" onclick="showPage('importacao')"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><path d="M12 15V3M8 7l4-4 4 4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg> Importar histórico</button>
     <div style="flex:1"></div>
-    <button class="nav-item" id="btn-sair">⏻ Sair</button>
+    <button class="nav-item" id="btn-sair"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg> Sair</button>
   </aside>
   <div class="main">
     <header class="topbar">
@@ -1112,7 +1120,7 @@ async function carregarDashboard(){
         <div class="kpi"><div class="num">${kpis.total_ativo_sistema}</div><div class="rotulo">No sistema</div></div>
         <div class="kpi"><div class="num">${kpis.total_pendentes}</div><div class="rotulo">Pendentes</div></div>
         <div class="kpi"><div class="num">${kpis.total_finalizadas_sistema}</div><div class="rotulo">Finalizadas</div></div>
-        <div class="kpi"><div class="num">${kpis.media_dias_geral ?? '—'}</div><div class="rotulo">Dias médios até contestação</div></div>
+        <div class="kpi kpi--hero"><div class="num">${kpis.media_dias_geral ?? '—'}</div><div class="rotulo">Dias médios até contestação</div></div>
       </div>
       <div class="grid-2" style="margin-bottom:14px">
         ${barras('Ranking de bancos', bancos, 'banco', 'total_contestacoes')}
