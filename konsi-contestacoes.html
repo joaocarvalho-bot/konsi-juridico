@@ -68,10 +68,7 @@ textarea.campo{min-height:84px;resize:vertical}
 .ia-leg{display:inline-flex;align-items:center;gap:2px}
 .ia-leg .dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin:0 4px 0 10px;vertical-align:middle}
 .dot-alta{background:var(--verde)}.dot-media{background:#E3B341}.dot-vazio{background:transparent;border:1px dashed var(--borda-forte)}
-.ia-badge{font-size:9px;font-weight:800;text-transform:none;letter-spacing:0;padding:1px 7px;border-radius:20px;margin-left:8px;vertical-align:middle}
-.ia-badge--alta{background:var(--verde-suave);color:var(--verde-escuro)}
-.ia-badge--media{background:#FBF3D9;color:var(--alerta)}
-.ia-badge--vazio{background:#F1F3F2;color:var(--texto-sec)}
+/* selos de texto por campo removidos — a cor do campo + a legenda bastam */
 .campo--alta{border-color:var(--verde-borda);background:#F3FBF9}
 .campo--media{border-color:#E3B341;background:#FDF9EC}
 .campo--vazio{border-style:dashed;border-color:var(--borda-forte)}
@@ -169,7 +166,7 @@ textarea.campo{min-height:84px;resize:vertical}
 
   <fieldset class="etapa ativa" id="etapa-1">
     <div class="recepcao-ia" id="recepcao-ia">
-      <div class="recepcao-head">✦ Recepção — pré-preencher com IA
+      <div class="recepcao-head">Recepção da notificação
         <span class="ia-leg"><i class="dot dot-alta"></i>literal <i class="dot dot-media"></i>conferir <i class="dot dot-vazio"></i>manual</span>
       </div>
       <input type="file" id="ia-file" accept=".eml,message/rfc822,.pdf,image/*" style="display:none">
@@ -179,7 +176,7 @@ textarea.campo{min-height:84px;resize:vertical}
         <div id="ia-file-nome" class="ia-file-nome"></div>
       </div>
       <div class="recepcao-acoes">
-        <button type="button" class="btn" id="ia-btn-extrair" style="white-space:nowrap">✦ Extrair com IA</button>
+        <button type="button" class="btn" id="ia-btn-extrair" style="white-space:nowrap">✦ Extrair</button>
         <span id="ia-status" class="ia-status"></span>
       </div>
     </div>
@@ -781,18 +778,13 @@ const IA_MAP = {
 };
 // numero_proposta, prazo_resposta, link_portal, subsidios, contratos_adicionais → observação interna
 
+// Só a COR do campo sinaliza a confiança (a legenda no topo explica); sem selo
+// de texto por campo. A evidência/motivo vai no title (tooltip no hover).
 function marcarCampo(id, estado, titulo){
   const el = $(id); if(!el) return;
   el.classList.remove('campo--alta','campo--media','campo--vazio');
   el.classList.add('campo--'+estado);
-  const lbl = el.closest('div') && el.closest('div').querySelector('label.lbl');
-  if(!lbl) return;
-  const antigo = lbl.querySelector('.ia-badge'); if(antigo) antigo.remove();
-  const b = document.createElement('span');
-  b.className = 'ia-badge ia-badge--'+estado;
-  b.textContent = estado==='alta' ? 'IA ✓' : estado==='media' ? 'conferir' : 'manual';
-  if(titulo) b.title = titulo;
-  lbl.appendChild(b);
+  if(titulo) el.title = titulo; else el.removeAttribute('title');
 }
 
 function aplicarExtracao(res){
@@ -868,7 +860,7 @@ async function extrairComIA(){
     status.innerHTML = `<span style="color:var(--erro)">${e.message}</span>`;
     toast('Falha na extração: ' + e.message, 'erro');
   } finally {
-    btn.disabled = false; btn.textContent = '✦ Extrair com IA';
+    btn.disabled = false; btn.textContent = '✦ Extrair';
   }
 }
 
