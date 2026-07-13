@@ -212,6 +212,7 @@ textarea.campo{height:auto;min-height:88px;padding:var(--sp3);resize:vertical;li
       </div>
       <div class="recepcao-acoes">
         <button type="button" class="btn" id="ia-btn-extrair" style="white-space:nowrap">✦ Extrair</button>
+        <button type="button" class="btn fantasma" id="ia-btn-limpar" style="white-space:nowrap">Limpar</button>
         <span id="ia-status" class="ia-status"></span>
       </div>
     </div>
@@ -1062,6 +1063,27 @@ $('ia-file').addEventListener('change', ()=> selecionarArquivo($('ia-file').file
 ['dragleave','drop'].forEach(ev => _iaDrop.addEventListener(ev, e=>{ e.preventDefault(); _iaDrop.classList.remove('arrastando'); }));
 _iaDrop.addEventListener('drop', e=>{ const f = e.dataTransfer.files[0]; if(f){ $('ia-file').files = e.dataTransfer.files; selecionarArquivo(f); } });
 $('ia-btn-extrair').addEventListener('click', extrairComIA);
+
+// Limpar: desfaz o que a IA preencheu — zera os campos mapeados, remove os
+// destaques de confiança, tira o bloco de auto-extração da observação interna
+// e reseta o arquivo/status. Não mexe no que o usuário digitou à mão antes.
+function limparExtracao(){
+  for(const id of Object.values(IA_MAP)){
+    const el = $(id); if(!el) continue;
+    el.value = '';
+    el.classList.remove('campo--alta','campo--media','campo--vazio');
+    el.removeAttribute('title');
+  }
+  const obs = val('e2-obs');
+  const i = obs.indexOf('— Auto-extração IA —');
+  if(i >= 0) set('e2-obs', obs.slice(0, i).replace(/\s+$/,''));
+  $('ia-file').value = '';
+  $('ia-file-nome').textContent = '';
+  $('ia-drop').classList.remove('tem-arquivo');
+  $('ia-status').innerHTML = '';
+  toast('Campos preenchidos pela IA foram limpos.');
+}
+$('ia-btn-limpar').addEventListener('click', limparExtracao);
 
 async function avancar(){
   const btn = $('btn-proxima'); btn.disabled = true;
