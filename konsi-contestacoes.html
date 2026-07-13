@@ -275,11 +275,28 @@ textarea.campo{height:auto;min-height:88px;padding:var(--sp3);resize:vertical;li
   </fieldset>
 
   <fieldset class="etapa" id="etapa-5">
-    <div style="display:flex;gap:10px;margin-bottom:14px">
-      <button class="btn" id="btn-gerar-laudo" type="button">✦ Elaborar laudo com IA</button>
+    <div class="card" style="margin-bottom:14px">
+      <label class="lbl">Modelo de laudo</label>
+      <select class="campo" id="e5-modelo"></select>
+      <div id="e5-modelo-hint" style="font-size:11px;color:var(--texto-sec);margin-top:6px"></div>
+      <div id="e5-alegacoes-wrap" style="margin-top:12px;display:none">
+        <label class="lbl">Alegações específicas <span style="font-weight:400;color:var(--texto-sec)">— sugestão da IA, revise</span></label>
+        <textarea class="campo" id="e5-alegacoes" style="min-height:80px" placeholder="Deixe em branco se não houver alegação adicional além do desconhecimento."></textarea>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
+        <button class="btn" id="btn-preencher-laudo" type="button">✦ Gerar laudo (.docx)</button>
+        <button class="btn fantasma" id="btn-baixar-laudo" type="button" style="display:none">⬇ Baixar .docx</button>
+      </div>
+      <div id="e5-laudo-status" style="font-size:12px;margin-top:12px;line-height:1.7"></div>
     </div>
-    <label class="lbl">Laudo (editável)</label>
-    <textarea class="campo" id="laudo-texto" style="min-height:260px"></textarea>
+    <details id="e5-fallback">
+      <summary style="cursor:pointer;font-size:12px;color:var(--texto-sec)">Motivo fora dos modelos? Gerar laudo do zero com IA (texto)</summary>
+      <div style="display:flex;gap:10px;margin:12px 0">
+        <button class="btn fantasma" id="btn-gerar-laudo" type="button">✦ Elaborar laudo com IA</button>
+      </div>
+      <label class="lbl">Laudo em texto (editável)</label>
+      <textarea class="campo" id="laudo-texto" style="min-height:220px"></textarea>
+    </details>
   </fieldset>
 
   <fieldset class="etapa" id="etapa-6">
@@ -767,6 +784,7 @@ function renderStepper(){
   for(let i=1;i<=6;i++) $('etapa-'+i).classList.toggle('ativa', i===etapa);
   $('btn-anterior').style.visibility = etapa===1 ? 'hidden' : 'visible';
   $('btn-proxima').textContent = etapa===6 ? '✓ Finalizar contestação' : 'Próxima ›';
+  if(etapa===5 && typeof prepararEtapa5==='function') prepararEtapa5();
 }
 renderStepper();
 
@@ -801,6 +819,131 @@ $('btn-gerar-laudo').addEventListener('click', async ()=>{
   } catch(e){ toast('Falha ao gerar laudo: ' + e.message, 'erro'); }
   finally { btn.disabled = false; btn.textContent = '✦ Elaborar laudo com IA'; }
 });
+
+/* ════════ etapa 5: laudo por MODELO .docx (Edge Function preencher-laudo) ════════ */
+const MODELOS_LAUDO = [
+  ['desconhecimento_operacao','Desconhecimento da operação'],
+  ['operacao_nao_realizada_corban','Operação não realizada (Corban)'],
+  ['cancelamento','Cancelamento'],
+  ['cartao_saque','Cartão / Saque'],
+  ['portabilidade_refinanciamento','Portabilidade / Refinanciamento'],
+  ['quitacao_antecipada','Quitação antecipada / desconto indevido'],
+  ['revisional_juros','Revisional de juros'],
+  ['superendividamento','Superendividamento'],
+  ['venda_casada','Venda casada'],
+  ['venda_casada_juros','Venda casada + juros'],
+  ['exibicao_documentos','Exibição de documentos'],
+];
+const MODELOS_COM_ALEGACOES = new Set(['desconhecimento_operacao']);
+let _laudoDocxUrl = null;
+let _e5SelPronto = false;
+
+function modeloDeMotivo(motivo, operacao){
+  const op = (operacao||'').toLowerCase();
+  if(op.includes('cart')) return 'cartao_saque';
+  if(op.includes('port') || op.includes('refin')) return 'portabilidade_refinanciamento';
+  const m = {
+    'NÃO RECONHECE':'desconhecimento_operacao','FRAUDE':'operacao_nao_realizada_corban',
+    'CANCELAMENTO':'cancelamento','DESACORDO COMERCIAL':'quitacao_antecipada',
+    'SUPERENDIVIDAMENTO':'superendividamento','REVISIONAL':'revisional_juros',
+    'EXIBICAO DOCUMENTO':'exibicao_documentos','VENDA CASADA':'venda_casada',
+  };
+  return m[(motivo||'').toUpperCase()] || '';
+}
+
+function prepararEtapa5(){
+  const sel = $('e5-modelo');
+  if(!_e5SelPronto){
+    sel.innerHTML = '<option value="">— selecione o modelo —</option>' +
+      MODELOS_LAUDO.map(([v,l])=>`<option value="${v}">${esc(l)}</option>`).join('');
+    sel.addEventListener('change', onModeloChange);
+    _e5SelPronto = true;
+  }
+  const c = contestacaoAtual || {};
+  sel.value = c.laudo_modelo || modeloDeMotivo(c.motivo, c.operacao) || '';
+  _laudoDocxUrl = null;
+  if(c.laudo_docx_path){
+    $('btn-baixar-laudo').style.display = '';
+    $('e5-laudo-status').innerHTML = '<span style="color:var(--verde);font-weight:700">✓ Laudo já gerado</span> — clique em Baixar para reabrir, ou gere novamente.';
+  } else {
+    $('btn-baixar-laudo').style.display = 'none';
+    $('e5-laudo-status').innerHTML = '';
+  }
+  onModeloChange();
+}
+
+async function onModeloChange(){
+  const modelo = $('e5-modelo').value;
+  $('e5-modelo-hint').textContent = modelo ? 'Confira se o modelo corresponde ao caso antes de gerar.' : '';
+  const precisa = MODELOS_COM_ALEGACOES.has(modelo);
+  $('e5-alegacoes-wrap').style.display = precisa ? '' : 'none';
+  if(precisa && !$('e5-alegacoes').value.trim() && contestacaoAtual){
+    try {
+      const { data: sessao } = await sb.auth.getSession();
+      const r = await fetch(`${SUPABASE_URL}/functions/v1/preencher-laudo`, {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${sessao.session.access_token}` },
+        body: JSON.stringify({ contestacaoId: contestacaoAtual.id, modo:'sugerir', modelo }),
+      });
+      const res = await r.json();
+      if(r.ok && res.alegacoes && res.alegacoes !== '—') $('e5-alegacoes').value = res.alegacoes;
+    } catch(_){ /* sugestão é opcional */ }
+  }
+}
+
+async function preencherLaudo(){
+  if(!contestacaoAtual) return toast('Complete as etapas anteriores.', 'erro');
+  const modelo = $('e5-modelo').value;
+  if(!modelo) return toast('Selecione o modelo de laudo.', 'erro');
+  const btn = $('btn-preencher-laudo');
+  btn.disabled = true; btn.textContent = 'Gerando .docx…';
+  try {
+    const { data: sessao } = await sb.auth.getSession();
+    const r = await fetch(`${SUPABASE_URL}/functions/v1/preencher-laudo`, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${sessao.session.access_token}` },
+      body: JSON.stringify({ contestacaoId: contestacaoAtual.id, modelo, alegacoesExtra: $('e5-alegacoes').value }),
+    });
+    const res = await r.json();
+    if(res.semModelo){ toast('Nenhum modelo aplicável — use o fallback (gerar do zero).', 'erro'); return; }
+    if(!r.ok) throw new Error(res.erro || 'Falha ao gerar o laudo');
+    contestacaoAtual.laudo_modelo = res.modelo;
+    contestacaoAtual.laudo_docx_path = `${contestacaoAtual.id}.docx`;
+    contestacaoAtual.laudo_texto = res.nota || contestacaoAtual.laudo_texto;
+    _laudoDocxUrl = res.docxUrl;
+    $('btn-baixar-laudo').style.display = '';
+    const op = res.opcaoInteracao;
+    $('e5-laudo-status').innerHTML =
+      '<span style="color:var(--verde);font-weight:700">✓ Laudo gerado (.docx)</span>'
+      + (op ? `<br>No Word, mantenha a <b>OPÇÃO ${op}</b> do bloco "Interações com o cliente" e apague a outra `
+             + `<span style="color:var(--texto-sec)">(${op==='A'?'há conversas na mensageria':'sem conversas na mensageria'})</span>.` : '');
+    baixarLaudo();
+    toast('Laudo gerado.');
+  } catch(e){ toast('Falha: ' + e.message, 'erro'); }
+  finally { btn.disabled = false; btn.textContent = '✦ Gerar laudo (.docx)'; }
+}
+
+async function baixarLaudo(){
+  try {
+    if(!_laudoDocxUrl){
+      const { data: sessao } = await sb.auth.getSession();
+      const r = await fetch(`${SUPABASE_URL}/functions/v1/preencher-laudo`, {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${sessao.session.access_token}` },
+        body: JSON.stringify({ contestacaoId: contestacaoAtual.id, modo:'url' }),
+      });
+      const res = await r.json();
+      if(!r.ok) throw new Error(res.erro || 'Não foi possível obter o arquivo');
+      _laudoDocxUrl = res.docxUrl;
+    }
+    const nome = `laudo_${String(contestacaoAtual.nome_cliente||'contestacao').replace(/[^\w]+/g,'_')}.docx`;
+    const a = document.createElement('a');
+    a.href = _laudoDocxUrl; a.download = nome; document.body.appendChild(a); a.click(); a.remove();
+  } catch(e){ toast('Falha ao baixar: ' + e.message, 'erro'); }
+}
+
+$('btn-preencher-laudo').addEventListener('click', preencherLaudo);
+$('btn-baixar-laudo').addEventListener('click', baixarLaudo);
 
 /* ════════ recepção: auto-preenchimento por IA (Edge Function extrair-dados) ════════ */
 // campo extraído (chave do schema) → id do input do formulário
@@ -921,9 +1064,10 @@ async function avancar(){
     if(etapa===3) await salvarEtapa3();
     if(etapa===3 && typeof montarPrevia==='function') montarPrevia();   // etapa 4; função criada na Task 8
     if(etapa===5){
+      const temTemplate = !!(contestacaoAtual.laudo_docx_path || contestacaoAtual.laudo_modelo);
       const editado = $('laudo-texto').value.trim();
-      if(!editado) throw new Error('Gere o laudo antes de avançar.');
-      if(editado !== (contestacaoAtual.laudo_texto||'')){
+      if(!temTemplate && !editado) throw new Error('Gere o laudo antes de avançar.');
+      if(editado && editado !== (contestacaoAtual.laudo_texto||'')){
         const { error } = await sb.from('contestacoes').update({ laudo_texto: editado }).eq('id', contestacaoAtual.id);
         if(error) throw error;
         contestacaoAtual.laudo_texto = editado;
@@ -952,6 +1096,8 @@ function novaContestacao(){
   $('e1-data-recebimento').value = new Date().toISOString().slice(0,10);
   $('e3-upload-status').textContent = ''; $('e3-btn-baixar').style.display = 'none';
   $('e3-aviso-app').style.display = 'none';
+  $('e5-laudo-status').innerHTML = ''; $('btn-baixar-laudo').style.display = 'none';
+  $('e5-alegacoes-wrap').style.display = 'none'; _laudoDocxUrl = null;
   renderStepper();
 }
 $('nav-nova').addEventListener('click', ()=>{ if(!contestacaoAtual) novaContestacao(); });
