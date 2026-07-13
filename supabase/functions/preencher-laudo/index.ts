@@ -191,6 +191,15 @@ MOTIVO: ${c.motivo || '(não informado)'}`;
     // V2: resolve o bloco condicional "interações com o cliente" — mantém a
     // OPÇÃO A (houve conversas) ou B (não houve) e remove a outra + a instrução.
     // No-op em modelos sem os marcadores {{IF/ELSE/ENDIF:interacao}} (V1).
+    const temInteracaoCond = xml.includes('{{IF:interacao}}');
+    // Trava: se o modelo tem o bloco condicional mas "Possui conversas na
+    // mensageria?" não foi respondido, não dá pra escolher A/B com segurança —
+    // melhor barrar do que emitir um laudo afirmando o lado errado.
+    if (temInteracaoCond && (c.tem_conversas_hyperflow === null || c.tem_conversas_hyperflow === undefined)) {
+      return json({
+        erro: 'Responda "Possui Conversas na Mensageria?" (etapa 3) antes de gerar — esse campo define o bloco de interações do laudo.',
+      }, 422);
+    }
     xml = resolverInteracao(xml, c.tem_conversas_hyperflow === true);
 
     for (const [k, v] of Object.entries(dados)) {
@@ -236,6 +245,7 @@ MOTIVO: ${c.motivo || '(não informado)'}`;
       modelo,
       docxUrl: signed?.signedUrl || null,
       opcaoInteracao,
+      interacaoAuto: temInteracaoCond,
       alegacoes,
       nota,
     });

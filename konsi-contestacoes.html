@@ -913,10 +913,17 @@ async function preencherLaudo(){
     _laudoDocxUrl = res.docxUrl;
     $('btn-baixar-laudo').style.display = '';
     const op = res.opcaoInteracao;
+    const detInteracao = op==='A'?'há conversas na mensageria':'sem conversas na mensageria';
+    let extra = '';
+    if(res.interacaoAuto){
+      extra = `<br>Bloco "Interações com o cliente" preenchido <b>automaticamente</b> `
+            + `<span style="color:var(--texto-sec)">(opção ${op} — ${detInteracao})</span>.`;
+    } else if(op){
+      extra = `<br>No Word, mantenha a <b>OPÇÃO ${op}</b> do bloco "Interações com o cliente" e apague a outra `
+            + `<span style="color:var(--texto-sec)">(${detInteracao})</span>.`;
+    }
     $('e5-laudo-status').innerHTML =
-      '<span style="color:var(--verde);font-weight:700">✓ Laudo gerado (.docx)</span>'
-      + (op ? `<br>No Word, mantenha a <b>OPÇÃO ${op}</b> do bloco "Interações com o cliente" e apague a outra `
-             + `<span style="color:var(--texto-sec)">(${op==='A'?'há conversas na mensageria':'sem conversas na mensageria'})</span>.` : '');
+      '<span style="color:var(--verde);font-weight:700">✓ Laudo gerado (.docx)</span>' + extra;
     baixarLaudo();
     toast('Laudo gerado.');
   } catch(e){ toast('Falha: ' + e.message, 'erro'); }
