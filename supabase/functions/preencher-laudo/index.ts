@@ -188,6 +188,11 @@ MOTIVO: ${c.motivo || '(não informado)'}`;
     if (!docXmlFile) return json({ erro: 'Modelo .docx inválido (sem document.xml)' }, 500);
     let xml = await docXmlFile.async('string');
 
+    // V2: resolve o bloco condicional "interações com o cliente" — mantém a
+    // OPÇÃO A (houve conversas) ou B (não houve) e remove a outra + a instrução.
+    // No-op em modelos sem os marcadores {{IF/ELSE/ENDIF:interacao}} (V1).
+    xml = resolverInteracao(xml, c.tem_conversas_hyperflow === true);
+
     for (const [k, v] of Object.entries(dados)) {
       xml = xml.split(`{${k}}`).join(escXml(v));
     }
@@ -238,6 +243,33 @@ MOTIVO: ${c.motivo || '(não informado)'}`;
     return json({ erro: String(err) }, 500);
   }
 });
+
+// ── V2: resolução de bloco condicional no document.xml ──────────────────────
+// Os marcadores {{IF:interacao}} / {{ELSE:interacao}} / {{ENDIF:interacao}}
+// ficam cada um em seu próprio parágrafo (<w:p>). Removemos parágrafos inteiros
+// para não deixar linhas vazias nem tags órfãs no .docx.
+function spanParagrafo(xml: string, marker: string): [number, number] | null {
+  const i = xml.indexOf(marker);
+  if (i < 0) return null;
+  const re = /<w:p(?: [^>]*)?>/g;
+  let m: RegExpExecArray | null, s = -1;
+  while ((m = re.exec(xml))) { if (m.index <= i) s = m.index; else break; }
+  const e = xml.indexOf('</w:p>', i);
+  if (s < 0 || e < 0) return null;
+  return [s, e + '</w:p>'.length];
+}
+function resolverInteracao(xml: string, mantemA: boolean): string {
+  const fs = spanParagrafo(xml, '{{IF:interacao}}');
+  const es = spanParagrafo(xml, '{{ELSE:interacao}}');
+  const ns = spanParagrafo(xml, '{{ENDIF:interacao}}');
+  if (!(fs && es && ns)) return xml; // modelo V1 sem marcadores → no-op
+  const rem: [number, number][] = mantemA
+    ? [[es[0], ns[1]], [fs[0], fs[1]]]   // remove ELSE..ENDIF e o IF (mantém A)
+    : [[ns[0], ns[1]], [fs[0], es[1]]];  // remove ENDIF e IF..ELSE (mantém B)
+  rem.sort((a, b) => b[0] - a[0]);
+  for (const [a, b] of rem) xml = xml.slice(0, a) + xml.slice(b);
+  return xml;
+}
 
 function cors() {
   return {
